@@ -18,6 +18,7 @@ A real-time stock analytics platform that ingests market data, processes financi
 * Power BI / Tableau
 * OpenAI API (for insights)
 * n8n / automation tools
+* Airtable CRM
 
 ## Project Structure
 
@@ -29,3 +30,5 @@ A real-time stock analytics platform that ingests market data, processes financi
 ## Getting Started
 
 Coming soon...
+
+password of user stock_user is stock_pass
