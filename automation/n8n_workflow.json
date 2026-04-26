@@ -1,0 +1,163 @@
+{
+  "name": "AIStock",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c9866006-4bb6-4ca9-a55f-2c632662bc3a",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://127.0.0.1:8000/ai-summary/latest",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "eefe7751-2c12-43b5-9ad3-7a5d08c8ecaa",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c50ea468-882a-47b5-a99b-f6abee134b77",
+              "leftValue": "={{$json[\"signals\"].length}}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "12b6df94-11c3-4541-90d9-99d85904a3ef",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "errorMessage": "An error occured!"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        592,
+        144
+      ],
+      "id": "acfc565c-23c3-4678-a98d-cb6f02386108",
+      "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "sendTo": "nathanhuang34@gmail.com",
+        "subject": "Daily Market Summary",
+        "message": "=<h2>Daily Market Summary</h2>\n\n<p><strong>Date:</strong> {{$json[\"date\"]}}</p>\n\n<p>{{$json[\"summary\"]}}</p>\n\n<p><strong>Signals:</strong> {{$json[\"signals\"].length}}</p>\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        608,
+        -32
+      ],
+      "id": "f17f403c-2385-44cc-b12f-aa606d27ea6a",
+      "name": "Send a message",
+      "webhookId": "ad7dc354-fc88-4851-b5d1-50eeb53a97bf",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zkb0NuFFe9vWwEuB",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "7a0258c6-2f01-49d6-b04a-30597472f793",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cc352e258c8efc3031d5608cf1573ac3b692a63b180c798e0af5edc53a0040a0"
+  },
+  "id": "UCc9waOQ9GSyVx1C",
+  "tags": []
+}
