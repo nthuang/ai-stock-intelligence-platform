@@ -129,9 +129,6 @@ The platform includes an n8n workflow that:
 - Generates AI-based market summaries  
 - Sends notifications via email or webhook  
 
-> **Note:** In the current setup, automation runs only while the FastAPI server and n8n instance are active locally.  
-> In a production environment, both services can be deployed to run continuously for fully automated daily execution.
-
 ---
 
 ## Dashboards
