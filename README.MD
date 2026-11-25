@@ -2,7 +2,7 @@
 
 A reproducible stock analytics application that turns historical OHLCV data into
 SQL-backed APIs, an interactive dashboard, threshold alerts, and optional
-LLM-generated summaries.
+news-grounded research answers and optional LLM-generated summaries.
 
 **Live mode is the default.** Stock endpoints refresh from Yahoo Finance at most
 once per 60 seconds, and a background task keeps the cache current while the
@@ -37,7 +37,9 @@ flowchart LR
     P --> A[FastAPI]
     A --> W[Interactive web dashboard]
     A --> B[Power BI / Tableau clients]
-    A --> L[Optional Groq summary]
+    A --> C[(PostgreSQL news cache and usage budgets)]
+    C --> T[Tavily basic news search]
+    C --> L[Optional Groq research and summary]
     L --> N[n8n: fresh signals only]
     N --> E[Gmail: configured by user]
 ```
@@ -49,28 +51,28 @@ then configure GROQ_API_KEY. The default model is openai/gpt-oss-20b served by
 Groq; set GROQ_MODEL to another model available to your account if needed.
 
 ```bash
-docker compose up --build -d
+docker compose -p stock-review up --build -d
 ```
 
 Open:
 
-- Dashboard: http://localhost:8000/dashboard
-- API documentation: http://localhost:8000/docs
-- Database/freshness status: http://localhost:8000/health
+- Dashboard: http://localhost:18000/dashboard
+- API documentation: http://localhost:18000/docs
+- Database/freshness status: http://localhost:18000/health
 
 Startup waits for PostgreSQL, fetches live data, then starts the API. For an
 offline snapshot, set DATA_MODE=demo before starting Compose.
 Re-running ingestion updates the same date/ticker rows without duplicating them.
 The first build needs network access to obtain images and packages; demo mode
-does not call Yahoo Finance. Summary generation calls Groq only when a key is
-configured and the summary button/endpoint is requested.
+does not call Yahoo Finance, Tavily, or Groq. Live research generation calls Groq only
+on an explicit research/summary request, with a key configured and a cache miss.
 
 If ports are already occupied, set API_PORT and POSTGRES_PORT in your environment
 or local environment file (for example 18000 and 15432). Services bind to loopback.
 
 ```bash
-docker compose logs ingest api
-docker compose stop
+docker compose -p stock-review logs ingest api
+docker compose -p stock-review stop
 ```
 
 The database volume persists. Do not use volume-deleting commands if you want
@@ -94,7 +96,7 @@ values. Never commit real credentials.
 For live startup, keep DATA_MODE=live and run:
 
 ```bash
-docker compose up --build -d
+docker compose -p stock-review up --build -d
 ```
 
 The API refreshes on startup and every REFRESH_INTERVAL_SECONDS (default 60).
@@ -117,7 +119,7 @@ setup; multiple workers would each maintain their own refresh cache.
 One-time refresh:
 
 ```bash
-docker compose run --rm ingest python -m scripts.ingest --mode live
+docker compose -p stock-review run --rm ingest python -m scripts.ingest --mode live
 ```
 
 Do not reload demo mode into a live database: overlapping snapshot dates would
@@ -149,7 +151,10 @@ Run scripts as modules from the repository root.
 | GET /signals | Paginated abnormal signals |
 | GET /signals/latest | Abnormal signals on the latest date |
 | GET /top-movers | Positive gainers and negative losers separately |
-| GET /ai-summary/latest | Summary, provider source, model, date, stale flag, signals |
+| GET /ai-summary/latest | Cached market overview, all-stock performance, significant signals, eligible news sources, freshness and provider metadata |
+| POST /ask | Bounded stock research; JSON body with question; numerical answers avoid news calls |
+| POST /notifications/claim | Fresh-signals-only daily delivery lease and escaped HTML report |
+| POST /notifications/complete | Record successful Gmail delivery using the lease key/token |
 | GET /dashboard | Source-controlled interactive dashboard |
 
 Example: /stocks?ticker=AAPL&start=2026-01-01&end=2026-04-24&limit=25&offset=0
@@ -220,7 +225,7 @@ schema; it does not modify application tables.
 With the demo stack running:
 
 ```bash
-docker compose exec -e TEST_DATABASE_URL=postgresql://stock_user:stock_password@postgres:5432/stock_db api python -m pytest -q
+docker compose -p stock-review exec -e TEST_DATABASE_URL=postgresql://stock_user:stock_password@postgres:5432/stock_db api python -m pytest -q
 ```
 
 CI provisions PostgreSQL, runs the complete suite, checks reproducible metrics,
@@ -232,8 +237,8 @@ idempotency, and backtest timing/allocation/costs.
 ## Optional n8n automation
 
 ```bash
-docker compose --profile automation up -d --wait
-docker compose exec n8n n8n import:workflow --input=/workflows/ai-stock.json
+docker compose -p stock-review --profile automation up -d --wait
+docker compose -p stock-review exec n8n n8n import:workflow --input=/workflows/ai-stock.json
 ```
 
 Open http://localhost:5678, complete local owner setup, and open the imported
@@ -245,7 +250,8 @@ inactive.
 The schedule uses 18:00 America/New_York. The HTTP node calls
 http://api:8000/ai-summary/latest inside Compose. Email is eligible only when
 signals exist AND stale=false; historical demo data will not send alerts.
-There is no delivery deduplication: repeated executions can resend a snapshot.
+PostgreSQL delivery leases prevent repeated daily reports for the same recipient;
+only successful Gmail sends are acknowledged. See the update procedure below.
 The API refreshes expired data before generating the summary; n8n does not run
 a separate ingestion job.
 
@@ -281,8 +287,9 @@ This is a local portfolio demo, not a production trading system. Public hosting
 would require authentication, request/rate limits for paid summaries, TLS,
 managed secrets, migrations, backups, and monitoring. Freshness currently uses
 the globally latest date and calendar days, not per-ticker exchange calendars.
+Research and notification endpoints are intended for this loopback-only local deployment; they have no authentication.
 Existing databases use create_all initialization, not schema migrations. Direct
-dependencies are pinned; transitive dependency resolution can still change.
+dependencies are pinned (including tavily-python 0.8.5); transitive dependency resolution can still change.
 
 The sample data is retained for reproducibility. Newly generated CSV/Parquet
 files, environment secrets, test caches, and build outputs are ignored. Docker
@@ -299,5 +306,241 @@ changes and is explicitly labeled rule-based rather than AI-generated.
 
 If a model returns NotFound, choose an ID available through your Groq account's
 model list. After changing environment variables, recreate the API container with
-`docker compose up -d --force-recreate api`. Never paste API keys into logs or
+`docker compose -p stock-review up -d --force-recreate api`. Never paste API keys into logs or
 issue reports.
+
+
+## News intelligence implementation
+
+The initial news helper is now connected to research and daily summaries. The
+previously empty news cache and research modules implement persistent storage
+using the existing SQLAlchemy engine; no extra database or service is required.
+New tables are additive: news_cache, news_usage, research_cache, alert_deliveries.
+Run database initialization when upgrading an existing installation.
+
+### Free-tier configuration
+
+Keep DATA_MODE=live to enable external retrieval. Set NEWS_ENABLED=true and add
+your Tavily key in your local environment file. Configure a free Groq account and
+GROQ_MODEL=openai/gpt-oss-20b or openai/gpt-oss-120b (subject to your account's
+availability and free-tier limits). No paid API dependency was added. Tavily
+searches explicitly use basic depth and disable automatic parameter upgrades.
+
+| Variable | Default | Behavior |
+| --- | --- | --- |
+| NEWS_ENABLED | false | Explicit opt-in; DATA_MODE=demo overrides it |
+| TAVILY_API_KEY | empty | Missing key returns a visible status without a request |
+| NEWS_MAX_RESULTS | 5 | Maximum articles per ticker, bounded to 1?20 |
+| NEWS_CACHE_TTL_SECONDS | 21600 | Six-hour persistent news cache |
+| NEWS_DAILY_SEARCH_LIMIT | 20 | UTC-day attempted search budget |
+| NEWS_MONTHLY_SEARCH_LIMIT | 500 | UTC-month budget, capped at 900 |
+| NEWS_MAX_TICKERS_PER_REQUEST | 2 | Maximum searched companies per research request, bounded to 1?5 |
+| NEWS_TIMEOUT_SECONDS | 15 | Per-search timeout, bounded to 1?30 seconds |
+| SUMMARY_CACHE_TTL_SECONDS | 21600 | Cache generated text for unchanged data/evidence/model |
+
+The monthly cap leaves headroom below a 1,000-credit allowance; confirm your
+account's actual allowance and lower it if necessary. Budgets cover this
+application's basic-search attempts, not activity in other Tavily clients.
+Attempts are reserved and committed before the network call, including failed
+attempts. They survive restarts. PostgreSQL advisory locks serialize searches;
+concurrent callers receive a busy status instead of duplicate external searches.
+Cached results remain usable after a budget is reached. Cache storage failures
+fail closed. Failed searches/generated fallbacks have a maximum 60-second
+cooldown. Tavily calls have no automatic retry; a later explicit request may
+retry after the cooldown and consumes another reservation. Groq permits one
+bounded provider retry. Expired cache entries are replaced on access; there is
+no background archival/pruning task.
+
+Cache keys include ticker, market date, normalized intent, search depth, result
+count and the strict same-session date policy. Legacy NEWS_LOOKBACK_DAYS values are ignored. Equivalent catalyst questions share searches;
+earnings, dividend, acquisition and lawsuit intents have separate entries.
+Daily summaries prioritize BIG_GAIN/BIG_DROP companies. The stock refresh loop
+never retrieves news or generates research. Dashboard research is requested by
+buttons, independent of the existing minute-by-minute stock refresh.
+
+### Grounding and historical boundaries
+
+The router recognizes monitored tickers and company names. Pure numerical
+questions return server-formatted database prices, daily returns, stored moving
+averages, volatility and signals, without calling Tavily or Groq. Best/worst
+comparisons rank stored daily returns. This is a bounded router, not a general
+financial agent: it does not calculate arbitrary ratios or answer arbitrary
+historical-date questions. All answers carry the actual stored session date.
+
+Reason/catalyst/news questions combine those facts with eligible retrieved
+articles. Model text is qualitative; generated numeric figures and unrecognized
+citations cause a labeled fallback. Article identifiers are assigned by the
+server; URLs, titles, publishers and publication dates come from retrieved
+records. External article content is explicitly treated as untrusted data.
+Reported events and possible influences are displayed separately; association
+is not proof of causation. Validation checks citation membership and output
+structure, not the factual truth of every provider article or model inference.
+
+Stock and article dates must match in America/New_York. Retrieval searches that
+single session date, and results are filtered again before being used in research.
+The cutoff is the regular 16:00 New York close (converted with daylight-saving
+time), capped at now for the current incomplete session. Prior-day, next-day and
+after-cutoff articles are excluded, including cached articles with mismatched
+dates. Date-only, missing or ambiguous timestamps cannot establish pre-cutoff
+availability and are excluded. Special exchange early closes are not modeled;
+this is not a point-in-time historical backtesting news dataset. Publication dates
+and snippets depend on provider metadata. Daily bars may be delayed or provisional.
+
+### Upgrade the existing stock-review environment
+
+Do not overwrite your local environment file. Add the variables above as needed.
+Your current host ports are API 18000, PostgreSQL 15432, and n8n 5678. Keep those
+values and the stock-review project name so the existing volumes are reused.
+From PowerShell at the repository root:
+
+```powershell
+$env:API_PORT = '18000'
+$env:POSTGRES_PORT = '15432'
+$env:N8N_PORT = '5678'
+docker compose -p stock-review build api ingest
+docker compose -p stock-review run --rm --no-deps api python -m backend.init_db
+docker compose -p stock-review up -d --no-deps api
+docker compose -p stock-review --profile automation up -d --no-deps n8n
+docker compose -p stock-review ps
+```
+
+These steps add tables and recreate the API with the updated environment. They
+do not reload demo data into your live database. PostgreSQL must already be
+running (as in your existing setup). For a fresh installation, use
+`docker compose -p stock-review --profile automation up --build -d --wait`.
+Do not delete volumes; n8n_data contains your existing Gmail credential storage.
+N8N_EDITOR_BASE_URL and WEBHOOK_URL continue to derive from N8N_PORT.
+
+### Update the imported n8n workflow without losing Gmail authorization
+
+1. In the existing n8n UI, download a backup of the current workflow and note its
+   Gmail credential selection. Deactivate/unpublish the old scheduled workflow.
+2. Import automation/n8n_workflow.json through the UI's **Import from File**
+   command into a new workflow. A mounted JSON update alone does not update the
+   workflow already stored in n8n. Leave the new workflow inactive while reviewing.
+3. Open **Send a message** and select the same existing Gmail OAuth credential
+   from the credential dropdown. Do not create a new credential or remove the
+   existing n8n volume. The exported workflow intentionally contains no credential
+   IDs, tokens or personal recipient address.
+4. Check ALERT_EMAIL in your local environment. If changed, recreate only n8n
+   with the command above so its environment updates. Keep its port stable; if
+   changing it, update the Google OAuth allowed redirect to exactly the URL shown
+   by n8n's credential dialog (normally
+   http://localhost:5678/rest/oauth2-credential/callback).
+5. Inspect **HTTP Request ? If ? Claim delivery ? Delivery allowed ? Send a message
+   ? Record delivery**. The first If still requires fresh data and significant
+   signals. The claim endpoint independently checks those conditions.
+6. Execute the entire workflow manually with a fresh session containing a
+   significant signal. If there is no eligible snapshot, it correctly sends
+   nothing; do not bypass the freshness/signals gate to test historical data.
+   Confirm a successful Gmail node, a successful Record delivery node, and the
+   received HTML message. Then execute again: the claim should report already_sent
+   and the Gmail node should not run. Publish only the new workflow afterward.
+
+A failed send never reaches Record delivery. A pending claim expires after ten
+minutes; rerunning the whole workflow can then retry. Record delivery itself has
+three retries and is idempotent. Gmail sends are not automatically retried because
+a transport timeout may occur after Gmail accepts a message. If Gmail succeeded
+but acknowledgment failed, retry **Record delivery** from the saved execution
+before rerunning the entire workflow. Exactly-once email delivery is not possible
+across Gmail and PostgreSQL: an accepted send followed by a crash can still lead
+to a duplicate after lease expiry. Only run one active daily workflow. Reports
+are deduplicated per UTC market date and normalized recipient, even if prices
+change later in that session.
+
+### Example API requests
+
+```powershell
+Invoke-RestMethod http://localhost:18000/ai-summary/latest
+Invoke-RestMethod http://localhost:18000/ask -Method Post -ContentType 'application/json' -Body '{"question":"What is NVDA latest closing price?"}'
+Invoke-RestMethod http://localhost:18000/ask -Method Post -ContentType 'application/json' -Body '{"question":"Why did NVDA decline today?"}'
+Invoke-RestMethod http://localhost:18000/ask -Method Post -ContentType 'application/json' -Body '{"question":"Compare Apple and Amazon performance and relevant news."}'
+```
+
+Other examples: Which stock performed best today? Which stocks triggered trading
+signals? What is AAPL's 30-day moving average? What recent news may be influencing
+Microsoft? Summarize today's market and explain significant movements.
+
+A condensed illustrative summary response (values are examples, not a live quote):
+
+```json
+{
+  "date": "2026-01-02",
+  "summary": "AAPL: close $104.00, daily return +4.00%, signal BIG_GAIN. ...",
+  "llm_source": "fallback",
+  "model": "none",
+  "stale": true,
+  "signals": [],
+  "performance": [],
+  "market_overview": "No eligible news evidence is available.",
+  "sources": [],
+  "explanations": [],
+  "news_status": "offline",
+  "news_retrieval": {"AAPL": {"status": "offline", "cache_hit": false}},
+  "tools_used": ["stock_data", "indicators", "trading_signals", "news_retrieval"],
+  "generated_at": "2026-01-03T12:00:00+00:00",
+  "analysis_cutoff": "2026-01-02T21:00:00+00:00",
+  "cache_hit": false,
+  "last_successful_fetch": null
+}
+```
+
+The example omits stock records for brevity; actual performance and signals use
+the existing StockRecord aliases. /ask adds answer and preserves the same
+research metadata. A source contains id, ticker, title, url, publisher, published_date, news_date,
+stock_date, timezone and relevance_score. news_date and stock_date must match. An explanation contains source_id,
+reported_event and possible_influence. News statuses include ok, partial,
+no_results, offline, disabled, missing_api_key, daily_limit, monthly_limit,
+busy, request_limit, malformed_response, error and cache_unavailable.
+
+### Verification and remaining checks
+
+Verified locally on November 24, 2026: the final Python 3.13 Docker suite passed
+63 tests with no skips, including PostgreSQL integration tests. One upstream
+Starlette/AnyIO deprecation warning remains. The offline Docker build, HTTP
+smoke checks, Python syntax checks, dashboard JavaScript syntax, and Compose
+configuration validation passed. The backtest reproduced the committed metrics
+without changes. Browser checks exercised summary generation and a stored
+moving-average answer. No live Tavily/Groq calls or Gmail sends were made.
+
+Automated tests mock Groq/Tavily and block unmocked provider calls. PostgreSQL
+tests create and remove uniquely named test schemas, never application tables.
+The implementation includes tests for persistent quotas, cache expiry, concurrent
+requests, failures, article dates, question routing, citation validation,
+summary cache invalidation, HTML escaping and notification state transitions.
+
+```bash
+python -m pytest -q
+python -m compileall -q backend scripts tests
+python -m scripts.backtest_signals
+git diff --exit-code -- data/processed/backtest_metrics.json
+# In your running stack, integration tests use temporary isolated schemas:
+docker compose -p stock-review exec -e TEST_DATABASE_URL=postgresql://stock_user:stock_password@postgres:5432/stock_db api python -m pytest -q
+```
+
+Live Tavily quality, model availability for both Groq IDs, and actual delivery
+through the updated imported Gmail workflow require account-specific checks.
+No live AI credits or Gmail messages are needed for the automated suite. Browser
+and SMTP/Gmail provider behavior are separate from unit-level HTML safety tests.
+
+
+### Dashboard analysis and focused questions
+
+Generate summary interprets the stored snapshot using computed participation,
+equal-weight and median returns, leader/laggard dispersion, moving-average gaps,
+open-to-close direction and the size of a move relative to seven-session return
+variability. It does not concatenate every quote with another daily-return list.
+All calculations run in the backend; optional AI commentary interprets those
+computed results. A missing AI key or offline mode still provides useful numeric
+analysis. Equal-weight performance describes the selected sample, not a market index.
+
+The dashboard separates participation/trend insights, expandable company analysis,
+optional AI commentary and dated news evidence. /ask answers focused questions;
+common Nvidia misspellings such as nvdia are recognized. For example, "how did the
+market do?" interprets the monitored sample, while "why nvdia up" focuses on NVDA
+and explains the evidence limits if same-session news is unavailable. Stock session
+dates are separate from the timestamp when the analysis was generated.
+
+The offline preview on port 18001 intentionally disables Tavily and Groq. Its
+news-unavailable message does not mean numerical analysis failed. The live
+stock-review deployment is on port 18000 and uses its own existing configuration.

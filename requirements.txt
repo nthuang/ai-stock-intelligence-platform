@@ -10,4 +10,4 @@ python-dotenv==1.2.1
 openai==2.8.1
 pytest==9.0.1
 httpx==0.28.1
-tavily-python
+tavily-python==0.8.5

@@ -2,6 +2,14 @@ from unittest.mock import patch
 
 from backend.news import search_stock_news
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def live_news_adapter(monkeypatch):
+    # Exercise the adapter with mocked transport; offline behavior is tested separately.
+    monkeypatch.setenv("DATA_MODE", "live")
+
 
 def test_news_disabled(monkeypatch):
     monkeypatch.setenv("NEWS_ENABLED", "false")
@@ -32,7 +40,7 @@ def test_successful_news_retrieval(monkeypatch):
                 "title": "Nvidia market update",
                 "url": "https://example.com/nvidia",
                 "content": "Example financial news.",
-                "published_date": "2026-11-24",
+                "published_date": "2026-11-24T12:00:00Z",
                 "score": 0.95,
             }
         ]

@@ -1,5 +1,7 @@
 import os
 import logging
+import json
+from backend.analysis import analyze_snapshot, analysis_text
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -11,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 
 def _get_client() -> OpenAI:
+    if os.getenv("DATA_MODE", "live") != "live":
+        raise RuntimeError("External generation is disabled in offline mode")
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is not set")
@@ -30,37 +34,42 @@ def generate_summary(signals: list[dict]) -> dict:
             "model": "none",
         }
 
-    text_data = "\n".join(
-        [
-            f"{s.get('Date', 'Latest session')} {s['Ticker']}: {s['Signal']} ({s['Daily Return %']}%)"
-            for s in signals
-        ]
-    )
+    analysis = analyze_snapshot(signals)
+    text_data = json.dumps(analysis, default=str)
 
     prompt = f"""
     You are a financial analyst.
 
-    Based on the following stock signals, write a short 2-3 sentence summary of market activity:
+    Choose which of the supplied computed interpretations matter most for this
+    session. Return JSON with a focus list containing one to three exact observation
+    titles from the data, ordered by importance. Do not write new prose or calculate
+    numbers. The application will display the corresponding verified interpretations.
 
     {text_data}
 
-    Describe only supplied observations. Do not invent causes, news, forecasts,
-    or trading recommendations. These are historical alerts, not predictions.
-    Be concise and professional.
+    Do not invent titles or add facts, causes, forecasts or trading recommendations.
     """
 
     try:
         response = _get_client().chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
             temperature=0.3,
             timeout=20,
         )
         content = response.choices[0].message.content
         if not content or not content.strip():
             raise ValueError("Empty provider response")
+        focus = json.loads(content).get('focus')
+        known = {item['title'] for item in analysis['observations']}
+        if not isinstance(focus, list) or not 1 <= len(focus) <= 3 or any(not isinstance(title, str) or title not in known for title in focus):
+            raise ValueError('Unknown interpretation')
+        if len(set(focus)) != len(focus):
+            raise ValueError('Duplicate interpretation')
         return {
-            "summary": content.strip(),
+            "summary": analysis_text(analysis),
+            "focus": focus,
             "source": "groq",
             "model": GROQ_MODEL,
         }
@@ -77,10 +86,10 @@ def generate_summary(signals: list[dict]) -> dict:
             "RuntimeError": "GROQ_API_KEY is not configured.",
         }
         reason = reasons.get(error_type, "Summary provider is temporarily unavailable.")
-        moves = [f"{s['Ticker']} {s['Daily Return %']:+.2f}%" for s in signals
-                 if isinstance(s.get('Daily Return %'), (int, float))]
+        if os.getenv("DATA_MODE", "live") != "live":
+            reason = "External AI is disabled in demo mode."
         return {
-            "summary": "Rule-based signals: " + (", ".join(moves) if moves else "No valid daily returns available."),
+            "summary": analysis_text(analysis),
             "provider_error": reason,
             "source": "fallback",
             "model": "none",

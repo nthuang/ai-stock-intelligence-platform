@@ -24,7 +24,7 @@
       "parameters": {
         "url": "http://api:8000/ai-summary/latest",
         "options": {
-          "timeout": 60000
+          "timeout": 240000
         }
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -82,19 +82,97 @@
     {
       "parameters": {
         "sendTo": "={{$env.ALERT_EMAIL}}",
-        "subject": "Daily Market Summary",
-        "message": "=<h2>Daily Market Summary</h2>\n\n<p><strong>Date:</strong> {{$json[\"date\"]}}</p>\n\n<p>{{$json[\"summary\"]}}</p>\n\n<p><strong>Signals:</strong> {{$json[\"signals\"].length}}</p>\n",
-        "options": {}
+        "subject": "={{ \"Daily Market Intelligence ? \" + $(\"HTTP Request\").item.json.date }}",
+        "message": "={{ $json.html }}",
+        "options": {},
+        "emailType": "html"
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.2,
       "position": [
-        608,
+        1024,
         -32
       ],
       "id": "f17f403c-2385-44cc-b12f-aa606d27ea6a",
       "name": "Send a message",
       "webhookId": "ad7dc354-fc88-4851-b5d1-50eeb53a97bf"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/notifications/claim",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({date: $json.date, recipient: $env.ALERT_EMAIL}) }}",
+        "options": {
+          "timeout": 240000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        608,
+        -32
+      ],
+      "id": "daily-delivery-claim",
+      "name": "Claim delivery"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "claim-allowed",
+              "leftValue": "={{ $json.allowed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        816,
+        -32
+      ],
+      "id": "daily-delivery-allowed",
+      "name": "Delivery allowed"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/notifications/complete",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({key: $(\"Claim delivery\").item.json.key, token: $(\"Claim delivery\").item.json.token}) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1232,
+        -32
+      ],
+      "id": "daily-delivery-complete",
+      "name": "Record delivery",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
     }
   ],
   "pinData": {},
@@ -125,12 +203,46 @@
       "main": [
         [
           {
+            "node": "Claim delivery",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Claim delivery": {
+      "main": [
+        [
+          {
+            "node": "Delivery allowed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delivery allowed": {
+      "main": [
+        [
+          {
             "node": "Send a message",
             "type": "main",
             "index": 0
           }
         ],
         []
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Record delivery",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

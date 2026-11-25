@@ -1,7 +1,7 @@
 ﻿"""Verify a running demo over HTTP, without calling a paid summary provider."""
 import argparse
 import json
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 
 def check(base_url: str) -> None:
@@ -22,7 +22,18 @@ def check(base_url: str) -> None:
     assert 'StockRecord' in get('/openapi.json')['components']['schemas']
     with urlopen(base_url.rstrip('/') + '/dashboard', timeout=10) as response:
         assert b'Market Observatory' in response.read()
-    print('Demo smoke checks passed: ingestion, pagination, nulls, schemas, dashboard')
+    request = Request(base_url.rstrip('/') + '/ask',
+                      data=json.dumps({'question': "What is AAPL's closing price?"}).encode(),
+                      headers={'Content-Type': 'application/json'})
+    with urlopen(request, timeout=10) as response:
+        answer = json.load(response)
+    assert answer['news_status'] == 'not_requested' and answer['sources'] == []
+    # Only generate summaries when external calls are guaranteed disabled.
+    if health['mode'] == 'demo':
+        summary = get('/ai-summary/latest')
+        assert summary['llm_source'] != 'groq' and summary['sources'] == []
+        assert len(summary['performance']) == 5
+    print('Demo smoke checks passed: ingestion, pagination, nulls, schemas, dashboard, research')
 
 
 if __name__ == '__main__':

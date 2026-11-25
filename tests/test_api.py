@@ -123,3 +123,108 @@ def test_live_provider_failure_does_not_serve_stale_prices(client, monkeypatch):
     monkeypatch.setattr(main.market_refresh, 'ensure', fail)
     assert client.get('/latest').status_code == 503
     assert client.get('/ai-summary/latest').status_code == 503
+
+
+def test_ask_quantitative_does_not_request_news(client, monkeypatch):
+    from backend import research
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Quantitative question consumed news credits')
+    monkeypatch.setattr(research, 'get_news', forbidden)
+    result = client.post('/ask', json={'question': "What is AAPL's latest closing price?"}).json()
+    assert '$104.00' in result['answer']
+    assert 'MSFT:' not in result['answer']
+    assert result['news_status'] == 'not_requested'
+    assert result['llm_source'] == 'rule'
+    assert result['sources'] == []
+    assert result['date'] == '2026-01-02'
+    assert 'AAPL' in client.post('/ask', json={'question': 'Which stock performed best today?'}).json()['answer']
+    assert 'insufficient history' in client.post('/ask', json={'question': "What is Apple's 30-day moving average?"}).json()['answer']
+    assert client.post('/ask', json={'question': ' '}).status_code == 422
+
+
+def test_ask_news_and_summary_compatibility(client):
+    result = client.post('/ask', json={'question': 'Why did Microsoft decline?'}).json()
+    assert result['news_status'] == 'offline'
+    assert 'unverified' in result['answer']
+    assert result['performance'][0]['Ticker'] == 'MSFT'
+    summary = client.get('/ai-summary/latest').json()
+    assert {'date', 'summary', 'llm_source', 'model', 'stale', 'signals', 'provider_error', 'last_successful_fetch'} <= summary.keys()
+    assert len(summary['performance']) == 2
+    assert summary['analysis_cutoff'].startswith('2026-01-02')
+    assert summary['generated_at']
+    assert client.get('/ai-summary/latest').json()['cache_hit'] is True
+
+
+def test_summary_cache_changes_with_market_data(client, monkeypatch):
+    calls = []
+    def summarize(rows):
+        calls.append(rows)
+        return {'summary': 'Observed movements.', 'source': 'groq', 'model': 'fake'}
+    monkeypatch.setattr(main, 'generate_summary', summarize)
+    assert client.get('/ai-summary/latest').json()['cache_hit'] is False
+    assert client.get('/ai-summary/latest').json()['cache_hit'] is True
+    with main.engine.begin() as connection:
+        connection.execute(StockPrice.__table__.update().where(StockPrice.ticker == 'AAPL').values(close=105))
+    assert client.get('/ai-summary/latest').json()['cache_hit'] is False
+    assert len(calls) == 2
+
+
+def test_stale_notifications_are_never_claimed(client):
+    result = client.post('/notifications/claim', json={'date': '2026-01-02', 'recipient': 'test@example.com'}).json()
+    assert result == {'allowed': False, 'reason': 'ineligible_snapshot'}
+
+
+def test_ask_returns_retrieved_sources_and_cited_explanation(client, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from backend import research
+    article = {'ticker': 'AAPL', 'title': 'Apple earnings', 'url': 'https://example.com/apple',
+               'publisher': 'example.com', 'published_date': '2026-01-02T12:00:00Z',
+               'content': 'Apple reported earnings.', 'relevance_score': .9}
+    monkeypatch.setattr(research, 'get_news', lambda *args, **kwargs: {'status': 'ok', 'articles': [article], 'cache_hit': False})
+    content = json.dumps({'overview': 'Apple moved amid earnings reports.',
+                          'explanations': [{'source_id': 'S1', 'possible_influence': 'Earnings may influence sentiment.'}]})
+    response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
+    monkeypatch.setattr(research.ai_summary, '_get_client', lambda: fake)
+    result = client.post('/ask', json={'question': 'Why did Apple rise?'}).json()
+    assert result['news_status'] == 'ok'
+    assert result['sources'][0]['url'] == article['url']
+    assert '[S1]' in result['answer'] and '$104.00' in result['answer']
+    assert result['explanations'][0]['reported_event'] == article['title']
+    assert 'content' not in result['sources'][0]
+
+
+def test_unsupported_ticker_uses_no_news(client, monkeypatch):
+    from backend import research
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Unsupported ticker should not search news')
+    monkeypatch.setattr(research, 'get_news', forbidden)
+    result = client.post('/ask', json={'question': 'Why did GOOG fall?'}).json()
+    assert 'Unsupported ticker' in result['answer']
+    assert result['sources'] == []
+
+
+def test_summary_interprets_breadth_instead_of_repeating_quotes(client):
+    result = client.get('/ai-summary/latest').json()
+    assert 'close $' not in result['summary']
+    assert '1 of 2' in result['summary']
+    assert '8.00 percentage points' in result['summary']
+    assert result['analysis']['metrics']['advancers'] == 1
+    assert result['analysis']['metrics']['equal_weight_return_pct'] == 0
+
+
+def test_market_question_and_company_typo_are_routed(client):
+    from backend.research import route_question
+    selected, wants_news = route_question('why nvdia up', [{'Ticker': 'NVDA'}, {'Ticker': 'AAPL'}])
+    assert selected == [{'Ticker': 'NVDA'}]
+    assert wants_news
+    answer = client.post('/ask', json={'question': 'how did the market do?'}).json()
+    assert '1 of 2' in answer['answer']
+    assert 'close $' not in answer['answer']
+
+
+def test_question_with_wrong_direction_is_corrected(client):
+    result = client.post('/ask', json={'question': 'Why did Microsoft rise?'}).json()
+    assert 'MSFT fell on 2026-01-02' in result['premise_note']
+    assert result['answer'].startswith(result['premise_note'])

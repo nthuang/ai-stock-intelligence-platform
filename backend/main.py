@@ -15,7 +15,11 @@ from backend.ai_summary import generate_summary
 from backend.db import engine
 from backend.models import StockPrice
 from backend.refresh import market_refresh
-from backend.schemas import HealthResponse, MoversResponse, StockRecord, SummaryResponse
+from backend.schemas import AskRequest, AskResponse, HealthResponse, MoversResponse, StockRecord, SummaryResponse
+from backend.research import research
+from backend.news import analysis_cutoff
+from backend.notifications import claim_delivery, complete_delivery, render_report
+from backend.schemas import AlertClaimRequest, AlertCompleteRequest
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +160,51 @@ def get_top_movers():
 @app.get("/ai-summary/latest", response_model=SummaryResponse)
 def ai_summary():
     rows = latest_records()
-    signals = [row for row in rows if row["signal"] in {"BIG_GAIN", "BIG_DROP"}]
-    result = generate_summary([StockRecord.model_validate(row).model_dump(by_alias=True) for row in rows])
-    return {"date": rows[0]["date"].date().isoformat(), "summary": result["summary"],
-            "llm_source": result["source"], "model": result["model"],
-            "stale": data_age(rows[0]["date"])[1], "signals": signals,
-            "provider_error": result.get("provider_error"),
-            "last_successful_fetch": market_refresh.last_success}
+    result = research(engine, [StockRecord.model_validate(row).model_dump(by_alias=True, mode="json") for row in rows],
+                      "Summarize the market and explain significant movements", summary=True, summarize=generate_summary)
+    return {**result, **research_metadata(rows)}
+
+
+def research_metadata(rows):
+    market_date = rows[0]["date"].date().isoformat()
+    age, stale = data_age(rows[0]["date"])
+    return {"date": market_date, "stale": stale,
+            "signals": [row for row in rows if row["signal"] in {"BIG_GAIN", "BIG_DROP"}],
+            "last_successful_fetch": market_refresh.last_success,
+            "analysis_cutoff": analysis_cutoff(market_date).isoformat(),
+            "data_freshness": {"market_date": market_date, "age_days": age, "stale": stale,
+                               "last_successful_fetch": market_refresh.last_success,
+                               "mode": "live" if market_refresh.live else "demo",
+                               "cutoff_convention": "Same America/New_York session date, before 16:00 ET or now if earlier; special early closes are not modeled."}}
+
+
+@app.post("/ask", response_model=AskResponse)
+def ask(request: AskRequest):
+    if not request.question.strip():
+        raise HTTPException(status_code=422, detail="question must not be blank")
+    rows = latest_records()
+    result = research(engine, [StockRecord.model_validate(row).model_dump(by_alias=True, mode="json") for row in rows], request.question)
+    return {**result, **research_metadata(rows)}
+
+
+@app.post("/notifications/claim")
+def claim_alert(request: AlertClaimRequest):
+    rows = latest_records()
+    metadata = research_metadata(rows)
+    if request.date != metadata["date"] or metadata["stale"] or not metadata["signals"]:
+        return {"allowed": False, "reason": "ineligible_snapshot"}
+    if "@" not in request.recipient or any(c.isspace() for c in request.recipient):
+        raise HTTPException(status_code=422, detail="A recipient address is required")
+    claim = claim_delivery(engine, request.date, request.recipient)
+    if claim["allowed"]:
+        result = research(engine, [StockRecord.model_validate(row).model_dump(by_alias=True, mode="json") for row in rows],
+                          "Summarize the market and explain significant movements", summary=True, summarize=generate_summary)
+        claim["html"] = render_report({**result, **metadata})
+    return claim
+
+
+@app.post("/notifications/complete")
+def complete_alert(request: AlertCompleteRequest):
+    if not complete_delivery(engine, request.key, request.token):
+        raise HTTPException(status_code=409, detail="Delivery lease changed or is unavailable")
+    return {"recorded": True}
