@@ -1,0 +1,74 @@
+x-app: &app
+  build: .
+  environment: &app-env
+    DATABASE_URL: postgresql://stock_user:stock_password@postgres:5432/stock_db
+    GROQ_API_KEY: ${GROQ_API_KEY:-}
+    GROQ_MODEL: ${GROQ_MODEL:-openai/gpt-oss-20b}
+    MAX_DATA_AGE_DAYS: ${MAX_DATA_AGE_DAYS:-4}
+    DATA_MODE: ${DATA_MODE:-live}
+    REFRESH_INTERVAL_SECONDS: ${REFRESH_INTERVAL_SECONDS:-60}
+
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: stock_db
+      POSTGRES_USER: stock_user
+      POSTGRES_PASSWORD: stock_password
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stock_user -d stock_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ingest:
+    <<: *app
+    command: ["python", "-m", "scripts.ingest"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    depends_on:
+      ingest:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.49.5@sha256:c349b24d6e242b4ea14d75e6f1a90c50e348cf4b1c4512b4a0a50219ead6533d
+    profiles: ["automation"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5678/healthz/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      GENERIC_TIMEZONE: America/New_York
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      ALERT_EMAIL: ${ALERT_EMAIL:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./automation/n8n_workflow.json:/workflows/ai-stock.json:ro
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  n8n_data:

@@ -7,11 +7,13 @@ __pycache__/
 venv/
 
 # Data
-data/*.csv
-data/*.parquet
+data/**/*.csv
+data/**/*.parquet
 
 # Env
 .env
+.env.*
+!.env.example
 
 # OS
 .DS_Store
@@ -19,3 +21,21 @@ data/*.parquet
 # IDE
 .vscode/
 .idea/
+
+# Tests and tooling
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local outputs
+*.log
+Thumbs.db

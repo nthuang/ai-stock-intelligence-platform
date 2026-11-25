@@ -1,0 +1,53 @@
+﻿"""Public response contracts; aliases retain dashboard-friendly column names."""
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class StockRecord(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    date: datetime = Field(alias="Date")
+    ticker: str = Field(alias="Ticker")
+    open: float = Field(alias="Open")
+    high: float = Field(alias="High")
+    low: float = Field(alias="Low")
+    close: float = Field(alias="Close")
+    volume: float = Field(alias="Volume")
+    daily_return_pct: float | None = Field(default=None, alias="Daily Return %")
+    ma_7: float | None = Field(default=None, alias="MA_7")
+    ma_30: float | None = Field(default=None, alias="MA_30")
+    volatility_7: float | None = Field(default=None, alias="Volatility_7")
+    signal: str | None = Field(default=None, alias="Signal")
+
+
+class SummaryResponse(BaseModel):
+    date: str
+    summary: str
+    llm_source: Literal["rule", "groq", "fallback"]
+    model: str
+    stale: bool
+    signals: list[StockRecord]
+    provider_error: str | None = None
+    last_successful_fetch: str | None = None
+
+
+class HealthResponse(BaseModel):
+    status: Literal["healthy", "degraded"]
+    database: str
+    rows: int
+    latest_date: str | None
+    age_days: int | None
+    stale: bool
+    mode: str
+    refresh_interval_seconds: int
+    last_successful_fetch: str | None
+    last_refresh_attempt: str | None
+    refresh_error: str | None
+
+
+class MoversResponse(BaseModel):
+    date: str
+    top_gainers: list[StockRecord]
+    top_losers: list[StockRecord]

@@ -1,0 +1,20 @@
+{
+  "methodology": "prior-close signal; next-open entry; same-day-close exit",
+  "start_date": "2025-10-28",
+  "end_date": "2026-04-24",
+  "tickers": [
+    "AAPL",
+    "AMZN",
+    "MSFT",
+    "NVDA",
+    "TSLA"
+  ],
+  "sessions": 123,
+  "cost_bps_per_side": 5.0,
+  "strategy_total_return_pct": -0.6962,
+  "buy_hold_gross_return_pct": -3.1452,
+  "max_drawdown_pct": -4.3023,
+  "annualized_sharpe_zero_risk_free": -0.2165,
+  "trade_count": 85,
+  "win_rate_pct": 52.9412
+}

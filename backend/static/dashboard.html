@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Observatory · Stock Intelligence</title>
+<style>
+:root{color-scheme:dark;--bg:#101820;--panel:#18232f;--muted:#a7b8c9;--border:#2b3b4c;--accent:#78d9c0}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4fa;font:15px system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:38px 24px}header{display:flex;justify-content:space-between;gap:24px;align-items:center}h1{font-size:32px;letter-spacing:-1px;margin:8px 0}h2{font-size:18px;margin:0 0 10px}p{color:var(--muted);line-height:1.6}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;text-transform:uppercase}a{color:var(--accent)}button,select{background:#243547;color:#fff;border:1px solid #476078;border-radius:8px;padding:10px;cursor:pointer}button:focus-visible,select:focus-visible{outline:3px solid var(--accent)}.status{padding:12px 16px;border:1px solid #746744;background:#302c20;border-radius:8px;margin:24px 0;color:#f2d698}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.metric,.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px}.metric small{color:var(--muted)}.metric strong{display:block;font-size:28px;margin-top:10px}.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin:16px 0}.panel.full{margin:16px 0}.chart{width:100%;height:280px}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:13px}.legend span{padding:5px 0}.positive{color:#78d9c0}.negative{color:#ffa5a5}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 8px;border-bottom:1px solid var(--border);white-space:nowrap}th{color:var(--muted);font-weight:500}.table-wrap{overflow:auto}.note{font-size:12px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px}#error{color:#ffa5a5}svg text{fill:#a7b8c9;font:12px system-ui}footer{border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:12px}@media(max-width:800px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}header{align-items:flex-start}h1{font-size:27px}}
+</style>
+</head>
+<body><main>
+<header><div><div class="eyebrow">Market Observatory / Research demo</div><h1>Stock Intelligence</h1><p>Five companies. Transparent signals. Traceable observations.</p></div><a href="/docs">API documentation ↗</a></header>
+<div id="status" class="status" role="status">Loading market snapshot…</div><p id="error" role="alert"></p>
+<section class="metrics" aria-label="Snapshot metrics"><div class="metric"><small>Latest stored session</small><strong id="asof">—</strong></div><div class="metric"><small>Companies in snapshot</small><strong id="count">—</strong></div><div class="metric"><small>Movement alerts · ±3% threshold</small><strong id="alerts">—</strong></div></section>
+<div class="grid"><section class="panel"><h2>Relative price performance</h2><p class="note">Each stock starts at 100 on the first displayed session. Price returns exclude dividends.</p><div id="performance" class="chart"></div><div id="legend" class="legend"></div></section><section class="panel"><h2>Latest daily moves</h2><p class="note">Close-to-close price change, by company.</p><div id="movers"></div></section></div>
+<section class="panel full"><div class="toolbar"><div><h2>Price and moving averages</h2><p class="note">One company at a time; averages use 7 and 30 trading sessions.</p></div><label>Company <select id="ticker" aria-label="Company"></select></label></div><div id="averages" class="chart"></div><div class="legend"><span style="color:#78d9c0">Close</span><span style="color:#8db5ff">7-session average</span><span style="color:#edbc7c">30-session average</span></div></section>
+<section class="panel full"><h2>Snapshot detail</h2><div class="table-wrap"><table><thead><tr><th>Company</th><th>Close · USD</th><th>Daily change</th><th>Volume</th><th>Rule signal</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+<section class="panel full"><div class="toolbar"><h2>Optional AI summary</h2><button id="summarize" type="button">Generate summary</button></div><p id="summary" aria-live="polite">Generate a summary of the stored signals. Provider unavailability is explicitly labeled.</p></section>
+<footer>Automatically refreshed daily market analytics. Signals are threshold rules, not predictions or investment advice. <a href="/stocks?limit=1000">Inspect source records</a>.</footer>
+</main>
+<script>
+'use strict';
+const colors=['#78d9c0','#8db5ff','#edbc7c','#d6a4f5','#ff9eab'];
+const el=id=>document.getElementById(id);
+const number=v=>v==null?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
+async function get(url){const response=await fetch(url);if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.detail||`Request failed (${response.status}): ${url}`);}return response.json();}
+function chart(target,series,dates){
+ const width=900,height=280,pad=50;
+ const values=series.flatMap(s=>s.values.filter(v=>v!=null&&Number.isFinite(v)));
+ if(!values.length){el(target).textContent='Insufficient history';return;}
+ let lo=Math.min(...values),hi=Math.max(...values);if(lo===hi){lo-=1;hi+=1;}
+ const x=i=>pad+i/Math.max(1,dates.length-1)*(width-2*pad);
+ const y=v=>height-pad-(v-lo)/(hi-lo)*(height-2*pad);
+ const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
+ svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('width','100%');svg.setAttribute('height','100%');svg.setAttribute('role','img');svg.setAttribute('aria-label',series.map(s=>s.name).join(', ')+' over time');
+ function node(tag,attributes,text){const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attributes))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;svg.appendChild(n);return n;}
+ for(let i=0;i<5;i++){const v=lo+(hi-lo)*i/4;node('line',{x1:pad,x2:width-pad,y1:y(v),y2:y(v),stroke:'#2b3b4c'});node('text',{x:0,y:y(v)+4},v.toFixed(1));}
+ series.forEach(s=>{let path='',started=false;s.values.forEach((v,i)=>{if(v==null||!Number.isFinite(v)){started=false;return;}path+=`${started?'L':'M'}${x(i)},${y(v)} `;started=true;});node('path',{d:path,fill:'none',stroke:s.color,'stroke-width':2.5});});
+ node('text',{x:pad,y:height-10},dates[0].slice(0,10));node('text',{x:width-pad,y:height-10,'text-anchor':'end'},dates.at(-1).slice(0,10));el(target).replaceChildren(svg);
+}
+async function load(){
+ const initialHealth=await get('/health');
+ const start=new Date();start.setMonth(start.getMonth()-6);
+ const dateFilter=initialHealth.mode==='live'?`&start=${start.toISOString().slice(0,10)}`:'';
+ let records=[],offset=0;while(true){const page=await get(`/stocks?limit=1000&offset=${offset}${dateFilter}`);records.push(...page);if(page.length<1000)break;offset+=page.length;}
+ if(!records.length){el('status').textContent='No data loaded. Run demo or live ingestion to populate this dashboard.';return;}
+ const health=await get('/health');
+ el('error').textContent='';
+ el('status').textContent=health.mode==='demo'?'Historical demo snapshot - live refresh is disabled.':`Auto-refresh every ${health.refresh_interval_seconds}s | fetched ${health.last_successful_fetch?new Date(health.last_successful_fetch).toLocaleString():'not yet'} | latest session ${health.latest_date}${health.stale?' | provider data is stale':''}. Yahoo daily bars may be delayed or provisional.`;
+ const selected=el('ticker').value;
+ for(const id of ['legend','ticker','rows','movers'])el(id).replaceChildren();
+ records.sort((a,b)=>a.Date.localeCompare(b.Date)||a.Ticker.localeCompare(b.Ticker));
+ const tickers=[...new Set(records.map(r=>r.Ticker))].sort(),dates=[...new Set(records.map(r=>r.Date))].sort();
+ const latest=records.filter(r=>r.Date===dates.at(-1));
+ el('asof').textContent=dates.at(-1).slice(0,10);el('count').textContent=latest.length;el('alerts').textContent=latest.filter(r=>['BIG_GAIN','BIG_DROP'].includes(r.Signal)).length;
+ const series=tickers.map((ticker,i)=>{const rows=records.filter(r=>r.Ticker===ticker),byDate=new Map(rows.map(r=>[r.Date,r.Close]));return {name:ticker,color:colors[i%colors.length],values:dates.map(d=>byDate.has(d)?byDate.get(d)/rows[0].Close*100:null)};});
+ chart('performance',series,dates);
+ series.forEach(s=>{const span=document.createElement('span');span.textContent=s.name;span.style.color=s.color;el('legend').appendChild(span);});
+ for(const ticker of tickers){const option=document.createElement('option');option.value=ticker;option.textContent=ticker;el('ticker').appendChild(option);}
+ function averages(){const rows=records.filter(r=>r.Ticker===el('ticker').value);chart('averages',[['Close',colors[0]],['MA_7',colors[1]],['MA_30',colors[2]]].map(([name,color])=>({name,color,values:rows.map(r=>r[name])})),rows.map(r=>r.Date));}
+ if(tickers.includes(selected))el('ticker').value=selected;
+ el('ticker').onchange=averages;averages();
+ for(const row of latest){const tr=document.createElement('tr');for(const value of [row.Ticker,number(row.Close),number(row['Daily Return %'])+'%',number(row.Volume),row.Signal||'WARMUP']){const td=document.createElement('td');td.textContent=value;tr.appendChild(td);}el('rows').appendChild(tr);}
+ for(const row of [...latest].sort((a,b)=>(b['Daily Return %']??-Infinity)-(a['Daily Return %']??-Infinity))){const p=document.createElement('p');p.className=row['Daily Return %']>=0?'positive':'negative';p.textContent=`${row.Ticker}   ${number(row['Daily Return %'])}%`;el('movers').appendChild(p);}
+}
+el('summarize').addEventListener('click',async()=>{el('summarize').disabled=true;el('summary').textContent='Generating…';try{const result=await get('/ai-summary/latest');el('summary').textContent=`${result.date} · ${result.llm_source}${result.stale?' · historical/stale':''}: ${result.summary}${result.provider_error?' Provider: '+result.provider_error:''}`;}catch(error){el('summary').textContent=error.message;}finally{el('summarize').disabled=false;}});
+let loading=false;
+async function reload(){if(loading)return;loading=true;try{await load();}catch(error){el('error').textContent=error.message;el('status').textContent='Refresh unavailable - any displayed values are from the last successful load.';}finally{loading=false;}}
+reload();setInterval(reload,60000);
+</script></body></html>

@@ -5,7 +5,9 @@ import os
 import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql import insert
+from backend.models import StockPrice
 
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN"]
@@ -21,10 +23,7 @@ env_path = BASE_DIR / ".env"
 load_dotenv(dotenv_path=env_path)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL is not set in .env")
-
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL) if DATABASE_URL else None
 
 
 def ensure_directories() -> None:
@@ -33,7 +32,8 @@ def ensure_directories() -> None:
 
 
 def fetch_ticker_data(ticker: str, period: str = PERIOD, interval: str = INTERVAL) -> pd.DataFrame:
-    df = yf.download(ticker, period=period, interval=interval, auto_adjust=False, progress=False)
+    df = yf.download(ticker, period=period, interval=interval, auto_adjust=False,
+                     progress=False, threads=False, timeout=10)
 
     if df.empty:
         raise ValueError(f"No data returned for ticker: {ticker}")
@@ -50,13 +50,18 @@ def fetch_ticker_data(ticker: str, period: str = PERIOD, interval: str = INTERVA
 
     df = df[required_cols].copy()
     df["Ticker"] = ticker
+    df = df.dropna(subset=["Date", "Open", "High", "Low", "Close", "Volume"])
     return df
 
 
 def add_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df = df.sort_values(["Ticker", "Date"]).copy()
 
-    df["Daily Return %"] = df.groupby("Ticker")["Close"].pct_change() * 100
+    df["Daily Return %"] = (
+        df.groupby("Ticker", sort=False)["Close"]
+        .pct_change(fill_method=None)
+        .mul(100)
+    )
     df["MA_7"] = df.groupby("Ticker")["Close"].transform(lambda s: s.rolling(7).mean())
     df["MA_30"] = df.groupby("Ticker")["Close"].transform(lambda s: s.rolling(30).mean())
     df["Volatility_7"] = df.groupby("Ticker")["Daily Return %"].transform(lambda s: s.rolling(7).std())
@@ -115,66 +120,36 @@ def prepare_db_dataframe(df: pd.DataFrame) -> pd.DataFrame:
         "signal",
     ]
 
-    return db_df[ordered_columns]
+    db_df = db_df[ordered_columns].replace([float("inf"), float("-inf")], pd.NA)
+    db_df = db_df.dropna(subset=["date", "ticker", "open", "high", "low", "close", "volume"])
+    if db_df.empty:
+        raise ValueError("No complete stock rows available for PostgreSQL")
+    if db_df.duplicated(["date", "ticker"]).any():
+        raise ValueError("Duplicate date/ticker rows in ingestion batch")
+    if (db_df[["open", "high", "low", "close"]] <= 0).any().any():
+        raise ValueError("Prices must be positive")
+    if (db_df["volume"] < 0).any():
+        raise ValueError("Volume must be nonnegative")
+    return db_df
 
 
 def upsert_to_postgres(df: pd.DataFrame) -> None:
+    if engine is None:
+        raise RuntimeError("DATABASE_URL is not set in .env")
+
     db_df = prepare_db_dataframe(df)
 
-    temp_table = "stock_prices_staging"
-
+    # Native upsert avoids a shared staging table and is safe for overlapping jobs.
+    records = db_df.astype(object).where(pd.notna(db_df), None).to_dict("records")
     with engine.begin() as connection:
-        connection.execute(text(f"DROP TABLE IF EXISTS {temp_table};"))
-        db_df.to_sql(temp_table, con=connection, if_exists="replace", index=False)
-
-        connection.execute(
-            text(
-                f"""
-                INSERT INTO stock_prices (
-                    date,
-                    ticker,
-                    open,
-                    high,
-                    low,
-                    close,
-                    volume,
-                    daily_return_pct,
-                    ma_7,
-                    ma_30,
-                    volatility_7,
-                    signal
-                )
-                SELECT
-                    date,
-                    ticker,
-                    open,
-                    high,
-                    low,
-                    close,
-                    volume,
-                    daily_return_pct,
-                    ma_7,
-                    ma_30,
-                    volatility_7,
-                    signal
-                FROM {temp_table}
-                ON CONFLICT (date, ticker)
-                DO UPDATE SET
-                    open = EXCLUDED.open,
-                    high = EXCLUDED.high,
-                    low = EXCLUDED.low,
-                    close = EXCLUDED.close,
-                    volume = EXCLUDED.volume,
-                    daily_return_pct = EXCLUDED.daily_return_pct,
-                    ma_7 = EXCLUDED.ma_7,
-                    ma_30 = EXCLUDED.ma_30,
-                    volatility_7 = EXCLUDED.volatility_7,
-                    signal = EXCLUDED.signal;
-                """
+        for offset in range(0, len(records), 1000):
+            statement = insert(StockPrice.__table__).values(records[offset:offset + 1000])
+            statement = statement.on_conflict_do_update(
+                index_elements=["date", "ticker"],
+                set_={column: getattr(statement.excluded, column)
+                      for column in db_df.columns if column not in {"date", "ticker"}},
             )
-        )
-
-        connection.execute(text(f"DROP TABLE IF EXISTS {temp_table};"))
+            connection.execute(statement)
 
 
 def main() -> None:
@@ -190,8 +165,8 @@ def main() -> None:
         except Exception as exc:
             print(f"Failed to fetch {ticker}: {exc}")
 
-    if not all_frames:
-        raise RuntimeError("No stock data was fetched successfully.")
+    if len(all_frames) != len(TICKERS):
+        raise RuntimeError("Incomplete ticker batch; database and snapshots were not updated")
 
     raw_df = pd.concat(all_frames, ignore_index=True)
     processed_df = add_indicators(raw_df)
