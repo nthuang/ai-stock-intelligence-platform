@@ -40,7 +40,13 @@ services:
       ingest:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)",
+        ]
       interval: 15s
       timeout: 10s
       retries: 5
@@ -49,7 +55,13 @@ services:
     image: docker.n8n.io/n8nio/n8n:2.49.5@sha256:c349b24d6e242b4ea14d75e6f1a90c50e348cf4b1c4512b4a0a50219ead6533d
     profiles: ["automation"]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:5678/healthz/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:5678/healthz/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -62,6 +74,8 @@ services:
       GENERIC_TIMEZONE: America/New_York
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       ALERT_EMAIL: ${ALERT_EMAIL:-}
+      N8N_EDITOR_BASE_URL: "http://localhost:${N8N_PORT:-5678}"
+      WEBHOOK_URL: "http://localhost:${N8N_PORT:-5678}/"
     volumes:
       - n8n_data:/home/node/.n8n
       - ./automation/n8n_workflow.json:/workflows/ai-stock.json:ro
