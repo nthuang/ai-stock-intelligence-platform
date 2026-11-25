@@ -83,7 +83,11 @@ def main() -> None:
     args = parser.parse_args()
     metrics = calculate_metrics(pd.read_csv(args.input), cost_bps=args.cost_bps)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(metrics, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+    args.output.write_text(
+        json.dumps(metrics, indent=2, allow_nan=False) + "\n",
+        encoding="utf-8",
+        newline="\n"
+    )
     print(json.dumps(metrics, indent=2))
 
 
