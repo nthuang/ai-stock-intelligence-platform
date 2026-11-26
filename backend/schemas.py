@@ -54,6 +54,7 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
     benchmark: Literal['SPY', 'QQQ'] = 'SPY'
     sessions: int = Field(default=21, ge=1, le=126)
+    window: int = Field(default=60, ge=20, le=126)
 
 
 class WatchlistRequest(BaseModel):

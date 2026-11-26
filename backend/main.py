@@ -220,7 +220,7 @@ def ai_summary():
     return {**with_quantitative(result, rows), **research_metadata(rows)}
 
 
-def with_quantitative(result, rows, question=None, benchmark='SPY', sessions=21):
+def with_quantitative(result, rows, question=None, benchmark='SPY', sessions=21, window=60):
     if question and re.search(r'nasdaq|\bqqq\b', question, re.I):
         benchmark = 'QQQ'
     elif question and re.search(r'\bspy\b|s&p|broader market', question, re.I):
@@ -232,7 +232,7 @@ def with_quantitative(result, rows, question=None, benchmark='SPY', sessions=21)
         monday = end.date() - timedelta(days=end.weekday())
         calendar = year_schedule(end.year)
         sessions = max(1, sum(monday <= day.date() <= end.date() for day in calendar.index))
-    data = quantitative.report(engine, benchmark, sessions, as_of=end)
+    data = quantitative.report(engine, benchmark, sessions, window, as_of=end)
     answer = quantitative.question_answer(question or 'Compare the monitored stocks with the broader market today', data, universe.names(engine))
     result['quantitative_context'] = data
     if answer and not result.get('answer', '').startswith('Unsupported ticker(s):'):
@@ -275,7 +275,7 @@ def ask(request: AskRequest):
         raise HTTPException(status_code=422, detail="question must not be blank")
     rows = latest_records()
     result = research(engine, [StockRecord.model_validate(row).model_dump(by_alias=True, mode="json") for row in rows], request.question)
-    return {**with_quantitative(result, rows, request.question, request.benchmark, request.sessions), **research_metadata(rows)}
+    return {**with_quantitative(result, rows, request.question, request.benchmark, request.sessions, request.window), **research_metadata(rows)}
 
 
 @app.post("/stock-news", response_model=StockNewsResponse)
@@ -337,7 +337,15 @@ def remove_watchlist(ticker: str):
 
 @app.get('/analytics')
 def analytics(benchmark: Literal['SPY', 'QQQ'] = 'SPY',
-              sessions: int = Query(21, ge=1, le=126), window: int = Query(60, ge=20, le=126)):
+              sessions: int = Query(21, ge=1, le=126, description='Cumulative return/drawdown period in exchange sessions; requires sessions + 1 prices'),
+              window: int = Query(60, ge=20, le=126, description='Full rolling return window for volatility, beta, correlation and Sharpe')):
+    """Computed price returns, relative percentage points, risk and anomalies.
+
+    No dividends/reinvestment or risk-free yield; annualization uses 252 sessions.
+    Null means insufficient aligned history or undefined variance. Volume and
+    Z-score baselines use the preceding 20 sessions, excluding the current bar.
+    Latest bars may be provisional; ETF returns are proxies, not index returns.
+    """
     market_refresh.ensure()
     return quantitative.report(engine, benchmark, sessions, window)
 

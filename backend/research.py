@@ -212,7 +212,7 @@ def _research(engine, rows, question, *, summary=False, summarize=ai_summary.gen
     # Unsupported named symbols must not silently become claims about another stock.
     symbols = re.findall(r"\$([A-Za-z]{1,5}(?:-[A-Za-z])?)\b", question)
     symbols += re.findall(r"\b[A-Z]{2,6}(?:-[A-Z])?\b", question)
-    known = {*news.company_context.get(), *(name.upper() for name in news.company_context.get().values()), "USD", "MA", "AI", "ETF", "SPY", "QQQ",
+    known = {*news.company_context.get(), *(name.upper() for name in news.company_context.get().values()), "USD", "MA", "AI", "ETF", "SPY", "QQQ", "NASDAQ",
              'WHY', 'DID', 'UP', 'DOWN', 'WHAT', 'IS', 'THE', 'HOW', 'DO', 'DOES', 'TODAY', 'MARKET', 'NEWS', 'STOCK', 'STOCKS'}
     unsupported = sorted({s.upper() for s in symbols if s.upper() not in known})
     sources, statuses = retrieve_context(engine, selected, question, summary=summary) if wants_news and not unsupported else ([], {})

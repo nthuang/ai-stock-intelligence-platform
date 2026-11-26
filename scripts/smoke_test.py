@@ -17,6 +17,14 @@ def check(base_url: str) -> None:
     assert status['health']['latest_date'] == health['latest_date']
     assert health['rows'] >= 620
     assert len(get('/tickers')['tickers']) == 5
+    assert len(get('/watchlist')['stocks']) == 5
+    benchmarks = get('/benchmarks')['benchmarks']
+    assert {row['ticker'] for row in benchmarks} == {'SPY', 'QQQ'}
+    analytics = get('/analytics?benchmark=SPY&sessions=21&window=60')
+    assert analytics['benchmark_status'] == 'ok'
+    assert len(analytics['stocks']) == 5
+    assert all(row['beta'] is not None for row in analytics['stocks'])
+    assert all(row['Ticker'] not in {'SPY', 'QQQ'} for row in get('/signals/latest'))
     assert len(get('/latest')) == 5
     rows = get('/stocks?ticker=AAPL&limit=2')
     assert len(rows) == 2 and all(row['Ticker'] == 'AAPL' for row in rows)

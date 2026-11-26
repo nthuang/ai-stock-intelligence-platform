@@ -82,3 +82,19 @@ def test_quantitative_questions_use_computed_values_without_generation():
     assert 'TEST beta: 2.000' in question_answer('Which stock has the highest beta?', data, companies)
     assert '1.000' in question_answer('How correlated are TEST and OTHER?', data, companies)
     assert 'percentage points' in question_answer('Compare TEST with SPY today', data, companies)
+
+
+def test_real_demo_benchmarks_match_original_fixture_sessions():
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1] / 'data/processed'
+    stocks = pd.read_csv(root / 'stocks_processed.csv')
+    benchmarks = pd.read_csv(root / 'benchmarks_demo.csv')
+    assert set(benchmarks.Ticker) == {'SPY', 'QQQ'}
+    for _, group in benchmarks.groupby('Ticker'):
+        assert set(group.Date.str[:10]) == set(stocks.Date.str[:10])
+        assert not group.Date.duplicated().any()
+        assert (group.Close > 0).all()
+    frame = pd.concat([stocks, benchmarks]).rename(columns={'Date': 'date', 'Ticker': 'ticker', 'Close': 'close', 'Volume': 'volume'})
+    result = metrics(frame, sorted(stocks.Ticker.unique()), 'SPY')
+    assert result['benchmark_status'] == 'ok'
+    assert all(stock['beta'] is not None for stock in result['stocks'])
