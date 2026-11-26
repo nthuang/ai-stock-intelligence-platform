@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import create_engine, func, select, text
 
-from backend.models import Base, StockPrice
+from backend.models import Base, StockPrice, StockObservation
 from scripts import fetch_data
 
 pytestmark = pytest.mark.integration
@@ -31,15 +31,20 @@ def test_postgres_upsert_is_idempotent_and_updates(monkeypatch):
             "Close": [101.0], "Volume": [1000],
         })
         frame = fetch_data.add_indicators(frame)
+        frame['Observed At'] = pd.Timestamp('2026-01-01T15:00:00Z')
         fetch_data.upsert_to_postgres(frame)
         fetch_data.upsert_to_postgres(frame)
         frame["Close"] = 102.0
+        frame['Observed At'] = pd.Timestamp('2026-01-01T16:00:00Z')
         fetch_data.upsert_to_postgres(frame)
         with engine.connect() as connection:
             assert connection.scalar(select(func.count()).select_from(StockPrice)) == 1
             row = connection.execute(select(StockPrice.__table__)).mappings().one()
             assert row["close"] == 102.0
             assert row["ma_30"] is None
+            observed = connection.execute(select(StockObservation.__table__)).mappings().one()
+            assert observed['ticker'] == 'TEST'
+            assert observed['observed_at'].hour == 16
     finally:
         engine.dispose()
         with base.begin() as connection:

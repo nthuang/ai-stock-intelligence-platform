@@ -1,0 +1,211 @@
+{
+    "description":  "Synthetic policy fixtures, not sampled real-world accuracy. Twelve retrieval scenarios across five tickers plus evidence-selection and legacy-prose probes.",
+    "retrieval":  [
+                      {
+                          "id":  "valid_company_event",
+                          "title":  "{company} announces new product",
+                          "content":  "{company} announced a new product.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "expected":  true,
+                          "coverage":  "Company event"
+                      },
+                      {
+                          "id":  "previous_session",
+                          "title":  "{company} earnings",
+                          "content":  "Reported earnings.",
+                          "published_date":  "2025-12-31T15:00:00Z",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "after_close",
+                          "title":  "{company} earnings",
+                          "content":  "Reported earnings.",
+                          "published_date":  "2026-01-02T21:00:01Z",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "date_only",
+                          "title":  "{company} earnings",
+                          "content":  "Reported earnings.",
+                          "published_date":  "2026-01-02",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "naive_timestamp",
+                          "title":  "{company} earnings",
+                          "content":  "Reported earnings.",
+                          "published_date":  "2026-01-02T14:00:00",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "utc_previous_ny_day",
+                          "title":  "{company} earnings",
+                          "content":  "Reported earnings.",
+                          "published_date":  "2026-01-02T01:00:00Z",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "quote_page",
+                          "title":  "{company} Stock Price, News, Quote",
+                          "content":  "Old earnings headlines.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "path":  "/quote/ABC",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "unrelated",
+                          "title":  "Unrelated retailer reports sales",
+                          "content":  "No monitored company is mentioned.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "opinion",
+                          "title":  "Should you buy {company} stock?",
+                          "content":  "An opinion about valuation.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "expected":  true,
+                          "coverage":  "Opinion / comparison"
+                      },
+                      {
+                          "id":  "old_holdings",
+                          "title":  "Fund sold {company} shares",
+                          "content":  "A filing disclosed trades from the previous quarter.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "expected":  true,
+                          "coverage":  "Holdings report"
+                      },
+                      {
+                          "id":  "unsafe_url",
+                          "title":  "{company} earnings",
+                          "content":  "Reported earnings.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "url":  "javascript:alert(1)",
+                          "expected":  false
+                      },
+                      {
+                          "id":  "context",
+                          "title":  "Technology stocks in focus",
+                          "content":  "{company} was mentioned among several companies.",
+                          "published_date":  "2026-01-02T15:00:00Z",
+                          "expected":  true,
+                          "coverage":  "Market context"
+                      }
+                  ],
+    "claims":  [
+                   {
+                       "id":  "supported",
+                       "claim":  "The product announcement may affect expectations for future demand.",
+                       "allow":  true,
+                       "supported":  true,
+                       "topic":  "product",
+                       "evidence_quote":  "Apple announced a new product."
+                   },
+                   {
+                       "id":  "invented_source",
+                       "claim":  "The product announcement may affect demand.",
+                       "source_id":  "S99",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "invented_number",
+                       "claim":  "The product may increase sales by 50%.",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "causal_certainty",
+                       "claim":  "The product announcement caused the stock to rise.",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "invented_url",
+                       "claim":  "The product could help sales. See https://fake.example.com.",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "technical_restatement",
+                       "claim":  "The moving average could indicate a trend.",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "holdings_pressure",
+                       "claim":  "Selling may have pressured the stock.",
+                       "coverage":  "Holdings report",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "unsupported_lawsuit",
+                       "claim":  "A new antitrust lawsuit could weigh on investor sentiment.",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "unsupported_acquisition",
+                       "claim":  "The acquisition may expand the company into new markets.",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "empty_response",
+                       "claim":  "",
+                       "allow":  false,
+                       "supported":  false
+                   },
+                   {
+                       "id":  "topic_quote_mismatch",
+                       "supported":  false,
+                       "allow":  false,
+                       "claim":  "A lawsuit could affect expectations.",
+                       "topic":  "legal",
+                       "evidence_quote":  "Apple announced a new product."
+                   },
+                   {
+                       "id":  "invented_quote",
+                       "supported":  false,
+                       "allow":  false,
+                       "claim":  "An acquisition could matter.",
+                       "topic":  "deal",
+                       "evidence_quote":  "Apple announced an acquisition."
+                   },
+                   {
+                       "id":  "wrong_source_quote",
+                       "supported":  false,
+                       "allow":  false,
+                       "claim":  "A launch could affect demand.",
+                       "topic":  "product",
+                       "evidence_quote":  "Microsoft announced a new product."
+                   },
+                   {
+                       "id":  "unknown_topic",
+                       "supported":  false,
+                       "allow":  false,
+                       "claim":  "A launch could matter.",
+                       "topic":  "invented",
+                       "evidence_quote":  "Apple announced a new product."
+                   },
+                   {
+                       "id":  "supported_denial_context",
+                       "supported":  true,
+                       "evidence_quote":  "Apple denied the acquisition rumor.",
+                       "claim":  "Deal coverage may affect expectations; check whether it is a denial.",
+                       "topic":  "deal",
+                       "allow":  true,
+                       "source_content":  "Apple denied the acquisition rumor."
+                   },
+                   {
+                       "id":  "supported_earnings_context",
+                       "supported":  true,
+                       "evidence_quote":  "Apple reported its quarterly earnings.",
+                       "claim":  "Earnings coverage may affect expectations.",
+                       "topic":  "earnings",
+                       "allow":  true,
+                       "source_content":  "Apple reported its quarterly earnings."
+                   }
+               ]
+}

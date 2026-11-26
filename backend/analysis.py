@@ -19,9 +19,9 @@ def stock_analysis(row):
     if gaps[7] is not None and gaps[30] is not None:
         position = f"{abs(gaps[7]):.2f}% {'above' if gaps[7] >= 0 else 'below'} its 7-session average and {abs(gaps[30]):.2f}% {'above' if gaps[30] >= 0 else 'below'} its 30-session average"
         if gaps[7] > 0 and gaps[30] > 0:
-            meaning = "the close remains above both recent trend baselines"
+            meaning = "the stored price remains above both recent trend baselines"
         elif gaps[7] < 0 and gaps[30] < 0:
-            meaning = "the close remains below both recent trend baselines"
+            meaning = "the stored price remains below both recent trend baselines"
         else:
             meaning = "the short and longer trend baselines give mixed readings"
         details.append(f"{ticker} is {position}; {meaning}.")
@@ -38,7 +38,7 @@ def stock_analysis(row):
             details.append(f"Its {intraday:+.2f}% open-to-close move {'reinforced' if intraday else 'did not extend'} the daily direction.")
     if ratio is not None and ratio >= 2:
         details.append(f"The daily move was {ratio:.2f} times its seven-session return standard deviation, a large move relative to that recent variability (which includes this session).")
-    quote = (f"{ticker} finished at ${close:.2f}" if close is not None else ticker)
+    quote = (f"{ticker} stored price: ${close:.2f}" if close is not None else ticker)
     if change is not None:
         quote += f", {'up' if change > 0 else 'down' if change < 0 else 'unchanged at'} {abs(change):.2f}% for the session"
     return {'ticker': ticker, 'quote': quote + '.', 'interpretation': ' '.join(details),
@@ -84,7 +84,7 @@ def analyze_snapshot(rows):
     above = sum(stock['gap_ma_30_pct'] > 0 for stock in known)
     if known:
         observations.append({'title': 'Trend context', 'text':
-            f"{above} of {len(known)} stocks with enough history closed above their 30-session average. "
+            f"{above} of {len(known)} stocks with enough history are above their 30-session average at the stored price. "
             'This separates the current trend position from a single day of gains or losses.'})
     else:
         observations.append({'title': 'Trend context', 'text': 'There is not enough stored moving-average history to confirm whether the daily moves align with longer trends.'})

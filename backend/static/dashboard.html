@@ -5,7 +5,8 @@
 <title>Market Observatory · Stock Intelligence</title>
 <style>
 :root{color-scheme:dark;--bg:#101820;--panel:#18232f;--muted:#a7b8c9;--border:#2b3b4c;--accent:#78d9c0}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4fa;font:15px system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:38px 24px}header{display:flex;justify-content:space-between;gap:24px;align-items:center}h1{font-size:32px;letter-spacing:-1px;margin:8px 0}h2{font-size:18px;margin:0 0 10px}p{color:var(--muted);line-height:1.6}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;text-transform:uppercase}a{color:var(--accent)}button,select{background:#243547;color:#fff;border:1px solid #476078;border-radius:8px;padding:10px;cursor:pointer}button:focus-visible,select:focus-visible{outline:3px solid var(--accent)}.status{padding:12px 16px;border:1px solid #746744;background:#302c20;border-radius:8px;margin:24px 0;color:#f2d698}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.metric,.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px}.metric small{color:var(--muted)}.metric strong{display:block;font-size:28px;margin-top:10px}.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin:16px 0}.panel.full{margin:16px 0}.chart{width:100%;height:280px}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:13px}.legend span{padding:5px 0}.positive{color:#78d9c0}.negative{color:#ffa5a5}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 8px;border-bottom:1px solid var(--border);white-space:nowrap}th{color:var(--muted);font-weight:500}.table-wrap{overflow:auto}.note{font-size:12px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px}#error{color:#ffa5a5}svg text{fill:#a7b8c9;font:12px system-ui}footer{border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:12px}@media(max-width:800px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}header{align-items:flex-start}h1{font-size:27px}}
-.insights{padding-left:20px;line-height:1.65}.insights li{margin:12px 0;color:var(--muted)}.insights strong{color:#eef4fa}details summary{cursor:pointer;color:var(--accent);padding:10px 0}#answer,#summary-commentary{white-space:pre-line}</style>
+.insights{padding-left:20px;line-height:1.65}.insights li{margin:12px 0;color:var(--muted)}.insights strong{color:#eef4fa}details summary{cursor:pointer;color:var(--accent);padding:10px 0}#summary-commentary{white-space:pre-line}
+.news-controls{display:flex;gap:14px;align-items:end;flex-wrap:wrap}.news-controls label{display:grid;gap:8px;min-width:220px}.source-cards{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.source-card{padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow-wrap:anywhere}.source-card h3{font-size:16px;line-height:1.5;margin:0 0 8px}.source-card p{margin:8px 0}.source-card .connection{border-top:1px solid var(--border);padding-top:12px}.news-link{font-size:12px;margin:8px 0;display:block}.news-empty{padding:12px 0}button:disabled{opacity:.6;cursor:wait}#news-move{font-weight:600;color:#eef4fa}.toolbar{flex-wrap:wrap}</style>
 </head>
 <body><main>
 <header><div><div class="eyebrow">Market Observatory / Research demo</div><h1>Stock Intelligence</h1><p>Five companies. Transparent signals. Traceable observations.</p></div><a href="/docs">API documentation ↗</a></header>
@@ -14,14 +15,23 @@
 <div class="grid"><section class="panel"><h2>Relative price performance</h2><p class="note">Each stock starts at 100 on the first displayed session. Price returns exclude dividends.</p><div id="performance" class="chart"></div><div id="legend" class="legend"></div></section><section class="panel"><h2>Latest daily moves</h2><p class="note">Close-to-close price change, by company.</p><div id="movers"></div></section></div>
 <section class="panel full"><div class="toolbar"><div><h2>Price and moving averages</h2><p class="note">One company at a time; averages use 7 and 30 trading sessions.</p></div><label>Company <select id="ticker" aria-label="Company"></select></label></div><div id="averages" class="chart"></div><div class="legend"><span style="color:#78d9c0">Close</span><span style="color:#8db5ff">7-session average</span><span style="color:#edbc7c">30-session average</span></div></section>
 <section class="panel full"><h2>Snapshot detail</h2><div class="table-wrap"><table><thead><tr><th>Company</th><th>Close · USD</th><th>Daily change</th><th>Volume</th><th>Rule signal</th></tr></thead><tbody id="rows"></tbody></table></div></section>
-<section class="panel full"><div class="toolbar"><h2>Daily market intelligence</h2><button id="summarize" type="button">Generate summary</button></div><p id="summary" aria-live="polite">Analyze participation, leaders and laggards, trend alignment, and unusual moves for the displayed session.</p><p id="summary-meta" class="note"></p><ul id="summary-insights" class="insights"></ul><details id="stock-analysis" hidden><summary>Company trend analysis</summary><ul id="summary-stocks" class="insights"></ul></details><p id="summary-commentary"></p><ul id="summary-explanations" class="insights"></ul><p id="summary-news" class="note"></p><ul id="summary-sources"></ul></section>
-<section class="panel full"><h2>Ask about the market</h2><form id="ask-form"><label for="question">Research question</label><input id="question" name="question" maxlength="1000" required style="width:100%;padding:12px;margin:12px 0;background:#101820;color:#eef4fa;border:1px solid #476078;border-radius:8px" placeholder="Why did NVDA decline? What is Apple's 30-day moving average?"><button id="ask-button" type="submit">Ask</button></form><p class="note">Ask a focused question such as "why nvdia up", "how did the market do?", or "what is Apple's 30-day moving average?" Answers use the displayed stock session, not necessarily today.</p><p id="answer" aria-live="polite"></p><p id="answer-meta" class="note"></p><p id="answer-news" class="note"></p><ul id="answer-sources"></ul></section>
+<section class="panel full"><div class="toolbar"><h2>Daily market intelligence</h2><button id="summarize" type="button">Generate summary</button></div><p id="summary" aria-live="polite">Analyze participation, leaders and laggards, trend alignment, and unusual moves for the displayed session.</p><p id="summary-meta" class="note"></p><ul id="summary-insights" class="insights"></ul><details id="stock-analysis" hidden><summary>Company trend analysis</summary><ul id="summary-stocks" class="insights"></ul></details><p id="summary-commentary"></p><p id="summary-news" class="note"></p><ul id="summary-sources" class="source-cards"></ul></section>
+<section id="stock-news-panel" class="panel full" aria-labelledby="stock-news-heading">
+ <h2 id="stock-news-heading">News behind the move</h2>
+ <p>Explore reports that may help explain a company's move. Each possible connection stays beside its source so you can judge the evidence.</p>
+ <form id="news-form" class="news-controls"><label for="news-ticker">Stock to research<select id="news-ticker" required></select></label><button id="news-button" type="submit" disabled>Find news for this move</button></form>
+ <p id="news-scope" class="note">Loading the stock session...</p>
+ <p id="news-move"></p><p id="news-status" class="news-empty" role="status">Choose a stock and find reports for its displayed session.</p>
+ <p id="news-meta" class="note"></p><p id="news-commentary" class="note"></p><ul id="news-sources" class="source-cards"></ul>
+</section>
 <footer>Automatically refreshed daily market analytics. Signals are threshold rules, not predictions or investment advice. <a href="/stocks?limit=1000">Inspect source records</a>.</footer>
 </main>
 <script>
 'use strict';
 const colors=['#78d9c0','#8db5ff','#edbc7c','#d6a4f5','#ff9eab'];
 const el=id=>document.getElementById(id);
+const companies={AAPL:'Apple',AMZN:'Amazon',MSFT:'Microsoft',NVDA:'Nvidia',TSLA:'Tesla'};
+let snapshotDate=null,newsRequest=0;
 const number=v=>v==null?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:2});
 async function get(url){const response=await fetch(url);if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(body.detail||`Request failed (${response.status}): ${url}`);}return response.json();}
 function chart(target,series,dates){
@@ -46,12 +56,20 @@ async function load(){
  if(!records.length){el('status').textContent='No data loaded. Run demo or live ingestion to populate this dashboard.';return;}
  const health=await get('/health');
  el('error').textContent='';
- el('status').textContent=health.mode==='demo'?'Historical demo snapshot - live refresh is disabled.':`Auto-refresh every ${health.refresh_interval_seconds}s | fetched ${health.last_successful_fetch?new Date(health.last_successful_fetch).toLocaleString():'not yet'} | latest session ${health.latest_date}${health.stale?' | provider data is stale':''}. Yahoo daily bars may be delayed or provisional.`;
+ el('status').textContent=health.mode==='demo'?'Historical demo snapshot - live refresh is disabled.':`Auto-refresh every ${health.refresh_interval_seconds}s | fetch completed ${health.last_successful_fetch?new Date(health.last_successful_fetch).toLocaleString():'not yet'} | latest session ${health.latest_date}${health.stale?' | provider data is stale':''}${health.latest_snapshot_observed_at?'':' | latest stored session has no fetch timestamp; news explanations are withheld'}. Yahoo daily bars may be delayed or provisional.`;
  const selected=el('ticker').value;
  for(const id of ['legend','ticker','rows','movers'])el(id).replaceChildren();
  records.sort((a,b)=>a.Date.localeCompare(b.Date)||a.Ticker.localeCompare(b.Ticker));
  const tickers=[...new Set(records.map(r=>r.Ticker))].sort(),dates=[...new Set(records.map(r=>r.Date))].sort();
  const latest=records.filter(r=>r.Date===dates.at(-1));
+ const nextDate=dates.at(-1).slice(0,10),previousStock=el('news-ticker').value;
+ if(snapshotDate&&snapshotDate!==nextDate){clearResearch('summary');el('summary').textContent='A new stock session is available. Generate an updated summary.';resetStockNews('A new stock session is available. Find news for the updated session.');}
+ snapshotDate=nextDate;
+ el('news-ticker').replaceChildren();
+ for(const row of latest){const option=document.createElement('option');option.value=row.Ticker;option.textContent=`${row.Ticker} · ${companies[row.Ticker]||row.Ticker}`;el('news-ticker').append(option);}
+ el('news-ticker').value=latest.some(r=>r.Ticker===previousStock)?previousStock:[...latest].sort((a,b)=>Math.abs(b['Daily Return %']||0)-Math.abs(a['Daily Return %']||0))[0].Ticker;
+ el('news-button').disabled=el('news-ticker').disabled;
+ el('news-scope').textContent=`Stock session: ${snapshotDate} (New York). Reports must share this date and precede the analysis cutoff. Searches run when requested.`;
  el('asof').textContent=dates.at(-1).slice(0,10);el('count').textContent=latest.length;el('alerts').textContent=latest.filter(r=>['BIG_GAIN','BIG_DROP'].includes(r.Signal)).length;
  const series=tickers.map((ticker,i)=>{const rows=records.filter(r=>r.Ticker===ticker),byDate=new Map(rows.map(r=>[r.Date,r.Close]));return {name:ticker,color:colors[i%colors.length],values:dates.map(d=>byDate.has(d)?byDate.get(d)/rows[0].Close*100:null)};});
  chart('performance',series,dates);
@@ -65,51 +83,86 @@ async function load(){
 }
 function addInsight(target, title, text){
  const item=document.createElement('li'),heading=document.createElement('strong');
- heading.textContent=title+': ';item.append(heading,document.createTextNode(text));el(target).append(item);
+ heading.textContent=title+': ';item.append(heading,document.createTextNode(text));el(target).append(item);return item;
 }
-function showResearch(result, target){
- const isSummary=target==='summary';
- el(target).textContent=isSummary?result.market_overview:result.answer;
+function showResearch(result){
+ if(result.date!==snapshotDate){el('summary').textContent='The stock session changed. Generate the summary again.';return;}
+ el('summary').textContent=result.market_overview;
  const provider=result.llm_source==='groq'?'AI-assisted analysis: '+result.model:'Computed from stored indicators';
- el(target+'-meta').textContent=`Stock session: ${result.date} | ${result.stale?'historical/stale':'within freshness threshold'} | ${provider} | analysis generated: ${result.generated_at||'unavailable'}${result.cache_hit?' | cached commentary':''}`;
- el(target+'-news').textContent=(!isSummary&&result.news_message&&result.answer.includes(result.news_message))?'':(result.news_message||'No news search was needed for this question.');
- if(isSummary){
-  for(const id of ['summary-insights','summary-stocks','summary-explanations'])el(id).replaceChildren();
-  for(const item of result.analysis?.observations||[])addInsight('summary-insights',item.title,item.text);
-  for(const stock of result.analysis?.stocks||[])addInsight('summary-stocks',stock.ticker,stock.interpretation);
-  el('stock-analysis').hidden=!(result.analysis?.stocks?.length);
-  el('summary-commentary').textContent=result.analyst_commentary?'Analyst commentary: '+result.analyst_commentary:'';
-  for(const explanation of result.explanations||[])addInsight('summary-explanations','Possible influence ['+explanation.source_id+']',explanation.reported_event+'. '+explanation.possible_influence);
+ el('summary-meta').textContent=`Stock session: ${result.date} (${result.data_freshness?.session_status||'unknown'}) | ${result.stale?'historical/stale':'within freshness threshold'} | ${provider} | news cutoff: ${result.analysis_cutoff||'unavailable'} | analysis generated: ${result.generated_at||'unavailable'}${result.cache_hit?' | cached commentary':''}`;
+ el('summary-news').textContent=result.news_message||'';
+ for(const id of ['summary-insights','summary-stocks'])el(id).replaceChildren();
+ for(const item of result.analysis?.observations||[])addInsight('summary-insights',item.title,item.text);
+ for(const stock of result.analysis?.stocks||[]){
+  const item=addInsight('summary-stocks',stock.ticker,stock.interpretation),button=document.createElement('button');
+  button.type='button';button.className='news-link';button.textContent=`Find news for ${stock.ticker}`;
+  button.addEventListener('click',()=>{resetStockNews();el('news-ticker').value=stock.ticker;el('stock-news-panel').scrollIntoView({behavior:'smooth'});el('news-form').requestSubmit();});item.append(button);
  }
- el(target+'-sources').replaceChildren();
+ el('stock-analysis').hidden=!(result.analysis?.stocks?.length);
+ el('summary-commentary').textContent=result.analyst_commentary||'';
+ renderSources(result,'summary-sources');
+}
+function renderSources(result,target){
+ el(target).replaceChildren();let count=0;
  for(const source of result.sources||[]){
-  // Defense in depth: never display a source from another stock session.
   if(source.news_date!==result.date||source.stock_date!==result.date)continue;
+  const published=Date.parse(source.published_date),cutoff=Date.parse(result.analysis_cutoff);
+  if(!Number.isFinite(published)||!Number.isFinite(cutoff)||published>cutoff)continue;
   let url;try{url=new URL(source.url);}catch{continue;}
   if(!['http:','https:'].includes(url.protocol))continue;
-  const item=document.createElement('li'),link=document.createElement('a');
+  const item=document.createElement('li'),heading=document.createElement('h3'),link=document.createElement('a'),meta=document.createElement('p');
+  item.className='source-card';meta.className='note';
   link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';link.textContent=`[${source.id}] ${source.title}`;
-  item.append(link,document.createTextNode(` | ${source.publisher||'Unknown publisher'} | News session: ${source.news_date} (New York) | Published: ${source.published_date}`));
-  el(target+'-sources').append(item);
+  const time=new Date(published).toLocaleTimeString('en-US',{timeZone:'America/New_York',hour:'numeric',minute:'2-digit'});
+  meta.textContent=`${source.ticker} · ${source.publisher||url.hostname} · ${source.news_date}, ${time} New York`;
+  const reported=document.createElement('p');reported.className='note';reported.textContent='What was reported · source headline';
+  heading.append(link);item.append(reported,heading,meta);
+  if(source.coverage){const coverage=document.createElement('p');coverage.className='note';coverage.textContent=source.coverage;item.append(coverage);}
+  const explanation=(result.explanations||[]).find(e=>e.source_id===source.id);
+  const connection=document.createElement('p'),label=document.createElement('strong');connection.className='connection';label.textContent='Why it might matter: ';connection.append(label,document.createTextNode(explanation?explanation.possible_influence:'No interpretation is available for this report. Read the source for context.'));item.append(connection);
+  if(explanation?.evidence_quote){const evidence=document.createElement('blockquote');evidence.textContent=explanation.evidence_quote;item.append(evidence);}
+  if(explanation){const caveat=document.createElement('p');caveat.className='note';caveat.textContent='AI-selected source excerpt with general topic context. The report is not independently verified and does not establish causation.';item.append(caveat);}
+  el(target).append(item);count++;
  }
+ return count;
 }
 function clearResearch(target){
  el(target+'-meta').textContent='';el(target+'-news').textContent='';el(target+'-sources').replaceChildren();
- if(target==='summary'){
-  for(const id of ['summary-insights','summary-stocks','summary-explanations'])el(id).replaceChildren();
-  el('summary-commentary').textContent='';el('stock-analysis').hidden=true;
- }
+ for(const id of ['summary-insights','summary-stocks'])el(id).replaceChildren();
+ el('summary-commentary').textContent='';el('stock-analysis').hidden=true;
 }
 el('summarize').addEventListener('click',async()=>{
  el('summarize').disabled=true;el('summary').textContent='Analyzing the stock session...';clearResearch('summary');
- try{showResearch(await get('/ai-summary/latest'),'summary');}catch(error){el('summary').textContent=error.message;}finally{el('summarize').disabled=false;}
+ try{showResearch(await get('/ai-summary/latest'));}catch(error){el('summary').textContent=error.message;}finally{el('summarize').disabled=false;}
 });
-el('ask-form').addEventListener('submit',async event=>{
- event.preventDefault();el('ask-button').disabled=true;el('answer').textContent='Researching your question...';clearResearch('answer');
- try{const response=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:el('question').value})});
+function resetStockNews(message='Choose a stock and find reports for its displayed session.'){
+ newsRequest++;for(const id of ['news-move','news-meta','news-commentary'])el(id).textContent='';el('news-sources').replaceChildren();el('news-status').textContent=message;el('news-ticker').disabled=false;el('news-button').disabled=!snapshotDate;
+}
+el('news-ticker').addEventListener('change',()=>resetStockNews());
+el('news-form').addEventListener('submit',async event=>{
+ event.preventDefault();if(!snapshotDate||!el('news-ticker').value)return;
+ resetStockNews('Finding reports for this stock and session...');const request=++newsRequest,ticker=el('news-ticker').value,date=snapshotDate;
+ el('news-button').disabled=true;el('news-ticker').disabled=true;
+ try{const response=await fetch('/stock-news',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticker,date})});
   if(!response.ok){const body=await response.json().catch(()=>({}));throw new Error(typeof body.detail==='string'?body.detail:`Research request failed (${response.status})`);}
-  showResearch(await response.json(),'answer');
- }catch(error){el('answer').textContent=error.message;}finally{el('ask-button').disabled=false;}
+  const result=await response.json();if(request!==newsRequest)return;
+  if(result.date!==date||result.ticker!==ticker)throw new Error('The news response does not match the selected stock session. Please try again.');
+  el('news-move').textContent=(result.analysis?.stocks?.[0]?.quote||ticker).replace('finished at','stored price:');
+  const count=renderSources(result,'news-sources'),retrieval=result.news_retrieval?.[ticker]||{};
+  el('news-status').textContent=count?`${count} same-session report${count===1?'':'s'} found. These reports provide context; they do not establish the cause of the move.`:(result.news_message||'No eligible reports were found for this session.');
+  if(!count&&retrieval.diagnostics){
+   const d=retrieval.diagnostics,x=d.excluded||{},reasons=[];
+   if(x.unknown_timestamp)reasons.push(`${x.unknown_timestamp} lacked a precise publication time`);
+   if(x.outside_session)reasons.push(`${x.outside_session} had a different session date`);
+   if(x.after_cutoff)reasons.push(`${x.after_cutoff} were published after the cutoff`);
+   if(x.non_article)reasons.push(`${x.non_article} were quote or overview pages`);
+   if(x.unrelated)reasons.push(`${x.unrelated} did not mention this company`);
+   el('news-status').textContent+=` Checked ${d.candidate_count} candidate${d.candidate_count===1?'':'s'}.${reasons.length?' Excluded: '+reasons.join('; ')+'.':''}`;
+  }
+  const searched=retrieval.retrieved_at?new Date(retrieval.retrieved_at).toLocaleString():'unavailable';
+  el('news-meta').textContent=`Stock session: ${date} (New York) | News checked: ${searched}${retrieval.diagnostics?.rss_fallback==='ok'?' | Yahoo company news feed also checked':''}${retrieval.cache_hit?' | cached results':''}${retrieval.cache_expires_at?' | Cached until: '+new Date(retrieval.cache_expires_at).toLocaleString():''}`;
+  el('news-commentary').textContent=count?(result.explanations?.length?'Possible connections are AI interpretations of the linked reports.': 'Source links are available. No AI explanation passed validation; read the reports for context.') :'';
+ }catch(error){if(request===newsRequest)el('news-status').textContent=error.message;}finally{if(request===newsRequest){el('news-button').disabled=false;el('news-ticker').disabled=false;}}
 });
 let loading=false;
 async function reload(){if(loading)return;loading=true;try{await load();}catch(error){el('error').textContent=error.message;el('status').textContent='Refresh unavailable - any displayed values are from the last successful load.';}finally{loading=false;}}

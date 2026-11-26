@@ -9,6 +9,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend import ai_summary, news
 from backend.analysis import analyze_snapshot, analysis_text
+from backend.evidence import TOPICS, interpret_evidence
 from backend.models import ResearchCache
 from backend.news_cache import digest, exclusive, get_news, read_cache, write_cache
 
@@ -61,16 +62,24 @@ def quantitative_answer(question, rows):
 def retrieve_context(engine, rows, question, *, summary=False):
     ranked = sorted(rows, key=lambda r: abs(r.get("Daily Return %") or 0), reverse=True)
     if summary:
-        ranked = [r for r in ranked if r["Signal"] in {"BIG_GAIN", "BIG_DROP"}]
+        # Alerts take priority, but quiet sessions still deserve news context.
+        # Stable sorting retains move-size order within each priority group.
+        ranked.sort(key=lambda r: r["Signal"] not in {"BIG_GAIN", "BIG_DROP"})
     cap = news.setting("NEWS_MAX_TICKERS_PER_REQUEST", 2, 1, 5)
     sources, statuses, seen = [], {}, set()
+    observed = [news.publication_time(str(row.get('Observed At'))) for row in rows]
+    shared_cutoff = min(observed) if observed and all(observed) else None
     for row in ranked[:cap]:
+        cutoff = shared_cutoff or news.publication_time(str(row.get('Observed At')))
+        if cutoff is None and os.getenv('DATA_MODE', 'live') == 'live':
+            statuses[row['Ticker']] = {'status': 'snapshot_unavailable', 'cache_hit': False}
+            continue
         result = get_news(engine, row["Ticker"], str(row["Date"])[:10], question)
         statuses[row["Ticker"]] = {k: v for k, v in result.items() if k != "articles"}
         accepted = 0
         for article in result["articles"]:
             market_date = str(row['Date'])[:10]
-            news_date = news.session_article_date(article.get('published_date'), market_date)
+            news_date = news.session_article_date(article.get('published_date'), market_date, cutoff)
             if not news_date:
                 continue
             accepted += 1
@@ -86,7 +95,7 @@ def retrieve_context(engine, rows, question, *, summary=False):
 
 
 def grounded_narrative(rows, sources, question):
-    """Model emits source identifiers only; all URLs and article titles are ours."""
+    """Model selects exact evidence and a topic; the server owns explanation prose."""
     fallback = {"summary": "Relevant reports are listed below; a causal link to the price move is not established.",
                 "source": "fallback", "model": "none", "explanations": []}
     if not sources:
@@ -106,37 +115,42 @@ def grounded_narrative(rows, sources, question):
                 "The server already supplies quantitative interpretation. Discuss only the retrieved reported events. "
                 "Do not restate price directions, technical indicators, moving averages, breadth or volatility. "
                 "If the question's price direction contradicts the observed session, follow the observed session. "
-                "Return JSON with overview (a brief qualitative market overview) and explanations (a list of "
-                "objects with source_id and possible_influence). Each explanation must refer to one supplied "
-                "source ID. Do not output URLs, markdown citations or numeric figures; the server supplies "
-                "exact numerical facts and article titles. Use cautious language such as may or could. "
+                "Return JSON with only explanations (a list of objects with source_id, topic, and evidence_quote). "
+                "Choose topic from: " + ', '.join(TOPICS) + ". "
+                "Copy evidence_quote verbatim from that source's content, between 20 and 300 characters. "
+                "Do not use a headline as a substitute for a missing excerpt. "
+                "Do not write possible_influence, conclusions, or other free-form commentary. "
+                "The server supplies conditional context for the selected topic. "
+                "Each explanation must refer to one supplied "
+                "source ID. Do not output URLs or markdown citations. Preserve the exact source wording in the quote. "
+                "Evidence is limited to headlines and retrieved excerpts, not necessarily full articles. "
+                "Publication date is not necessarily the event date. Never treat earlier transactions "
+                "as evidence of buying or selling in the observed session. Omit Holdings report explanations. "
+                "For Market context or Opinion / comparison coverage, describe that limitation and do not "
+                "present the piece as a company announcement or confirmed catalyst. Omit an item "
+                "if the excerpt does not support a meaningful connection. "
                 "Explain only the supplied evidence; do not add facts from memory.")},
                 {"role": "user", "content": json.dumps(context, default=str)}],
         )
         payload = json.loads(response.choices[0].message.content or "")
-        overview, explanations = payload.get("overview"), payload.get("explanations")
-        if not isinstance(overview, str) or not overview.strip() or not isinstance(explanations, list):
+        explanations = payload.get("explanations") if isinstance(payload, dict) else None
+        if not isinstance(explanations, list):
             raise ValueError("Invalid response structure")
         allowed = {s["id"]: s for s in sources}
         validated = []
         for item in explanations[:10]:
-            if not isinstance(item, dict) or item.get("source_id") not in allowed:
-                raise ValueError("Unknown citation")
-            influence = item.get("possible_influence")
-            if not isinstance(influence, str) or not influence.strip():
-                raise ValueError("Invalid explanation")
-            validated.append({"source_id": item["source_id"], "reported_event": allowed[item["source_id"]]["title"],
-                              "possible_influence": influence[:1200]})
-        # Reject model-generated links/citations/numbers rather than displaying invented evidence.
-        narrative = overview + " ".join(x["possible_influence"] for x in validated)
-        if re.search(r"\d|https?\s*:|www\.|\[[^\]]+\]|\b[\w-]+\.(com|org|net)\b", narrative, re.I):
-            raise ValueError("Unapproved numeric fact or citation")
-        if re.search(r"\b(caused|definitely|certainly|proves|because|due to)\b", narrative, re.I):
-            raise ValueError("Unsupported causal certainty")
-        if any(not re.search(r"\b(may|might|could|possible|uncertain|unverified)\b", x["possible_influence"], re.I) for x in validated):
-            raise ValueError("Explanation lacks uncertainty")
-        if any(re.search(r"moving.average|\b(technical|volatility|trend|breadth)\b", x['possible_influence'], re.I) for x in validated):
-            raise ValueError("Technical interpretation belongs to computed analysis")
+            if not isinstance(item, dict):
+                continue
+            source_id = item.get("source_id")
+            if not isinstance(source_id, str) or source_id not in allowed:
+                continue
+            if any(existing['source_id'] == source_id for existing in validated):
+                continue
+            explanation = interpret_evidence(item, allowed[source_id])
+            if explanation:
+                validated.append(explanation)
+        if not validated:
+            raise ValueError("No valid source explanations")
         # Never display a free-form model restatement of the numeric analysis:
         # models can invert above/below comparisons even without inventing digits.
         return {"summary": "Same-session reports provide context, but do not establish what caused the observed price move.",
@@ -200,7 +214,7 @@ def research(engine, rows, question, *, summary=False, summarize=ai_summary.gene
               "generated_at": datetime.now(timezone.utc).isoformat(), "cache_hit": False}
     if wants_news and selected and not unsupported:
         stable_status = {ticker: value["status"] for ticker, value in statuses.items()}
-        result = cached_generation(engine, {"version": 5, "rows": selected, "sources": sources,
+        result = cached_generation(engine, {"version": 10, "rows": selected, "sources": sources,
                     "news_status": stable_status, "question": question.strip().lower(), "summary": summary,
                     "model": ai_summary.GROQ_MODEL, "mode": os.getenv("DATA_MODE", "live"),
                     "groq_configured": bool(os.getenv("GROQ_API_KEY"))},
@@ -249,6 +263,8 @@ def news_status_message(status, market_date):
         'disabled': 'News retrieval is disabled for this deployment; news causes are unverified.',
         'missing_api_key': 'News retrieval has no configured Tavily key; news causes are unverified.',
         'no_results': 'No eligible same-session reports were found; the cause of the move is unverified.',
+        'no_session': 'The selected date is not a scheduled NASDAQ trading session.',
+        'snapshot_unavailable': 'This stored price has no fetch timestamp. News explanations are withheld until the provider returns a matching price snapshot.',
         'not_requested': 'No news search was needed for this analysis.',
         'daily_limit': 'The daily news search budget is exhausted; causes remain unverified without cached evidence.',
         'monthly_limit': 'The monthly news search budget is exhausted; causes remain unverified without cached evidence.',

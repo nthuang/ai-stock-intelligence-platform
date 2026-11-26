@@ -1,0 +1,748 @@
+{
+  "benchmark": "synthetic-news-policy-v2",
+  "external_calls": 0,
+  "scope": "Synthetic policy fixtures, not sampled real-world accuracy. Twelve retrieval scenarios across five tickers plus evidence-selection and legacy-prose probes.",
+  "metrics": {
+    "retrieval_cases": 60,
+    "retrieval_scenarios": 12,
+    "retrieval_passed": 60,
+    "fixture_precision": 1.0,
+    "fixture_recall": 1.0,
+    "claim_probes": 16,
+    "guardrail_expectations_met": 16,
+    "unsupported_probe_count": 13,
+    "unsupported_probes_accepted": 0
+  },
+  "limitations": [
+    "Authored examples, not measured live-provider accuracy.",
+    "Exact excerpt membership does not establish the truth or completeness of a report.",
+    "Commentary is server-authored topic context, not an event-specific causal explanation."
+  ],
+  "retrieval": [
+    {
+      "id": "AAPL:valid_company_event",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AAPL:previous_session",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:after_close",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:date_only",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:naive_timestamp",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:utc_previous_ny_day",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:quote_page",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:unrelated",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:opinion",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AAPL:old_holdings",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AAPL:unsafe_url",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AAPL:context",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AMZN:valid_company_event",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AMZN:previous_session",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:after_close",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:date_only",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:naive_timestamp",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:utc_previous_ny_day",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:quote_page",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:unrelated",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:opinion",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AMZN:old_holdings",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "AMZN:unsafe_url",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "AMZN:context",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "MSFT:valid_company_event",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "MSFT:previous_session",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:after_close",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:date_only",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:naive_timestamp",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:utc_previous_ny_day",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:quote_page",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:unrelated",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:opinion",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "MSFT:old_holdings",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "MSFT:unsafe_url",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "MSFT:context",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "NVDA:valid_company_event",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "NVDA:previous_session",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:after_close",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:date_only",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:naive_timestamp",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:utc_previous_ny_day",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:quote_page",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:unrelated",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:opinion",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "NVDA:old_holdings",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "NVDA:unsafe_url",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "NVDA:context",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "TSLA:valid_company_event",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "TSLA:previous_session",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:after_close",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:date_only",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:naive_timestamp",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:utc_previous_ny_day",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:quote_page",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:unrelated",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:opinion",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "TSLA:old_holdings",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    },
+    {
+      "id": "TSLA:unsafe_url",
+      "expected": false,
+      "accepted": false,
+      "passed": true
+    },
+    {
+      "id": "TSLA:context",
+      "expected": true,
+      "accepted": true,
+      "passed": true
+    }
+  ],
+  "claim_review": [
+    {
+      "id": "supported",
+      "claim": "The product announcement may affect expectations for future demand.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "The product announcement may affect expectations for future demand.",
+        "topic": "product",
+        "evidence_quote": "Apple announced a new product."
+      },
+      "displayed_explanations": [
+        {
+          "source_id": "S1",
+          "reported_event": "Apple announces a new product",
+          "topic": "product",
+          "evidence_quote": "Apple announced a new product.",
+          "possible_influence": "Product coverage may affect expectations for demand, competition, and spending. An announcement alone does not establish future sales or explain the observed move.",
+          "interpretation_method": "evidence-selected-template"
+        }
+      ],
+      "accepted": true,
+      "supported_by_fixture": true,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "invented_source",
+      "claim": "The product announcement may affect demand.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S99",
+        "possible_influence": "The product announcement may affect demand.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "invented_number",
+      "claim": "The product may increase sales by 50%.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "The product may increase sales by 50%.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "causal_certainty",
+      "claim": "The product announcement caused the stock to rise.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "The product announcement caused the stock to rise.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "invented_url",
+      "claim": "The product could help sales. See https://fake.example.com.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "The product could help sales. See https://fake.example.com.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "technical_restatement",
+      "claim": "The moving average could indicate a trend.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "The moving average could indicate a trend.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "holdings_pressure",
+      "claim": "Selling may have pressured the stock.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Fund sold Apple shares",
+        "content": "A filing described trades from the previous quarter.",
+        "coverage": "Holdings report"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "Selling may have pressured the stock.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "unsupported_lawsuit",
+      "claim": "A new antitrust lawsuit could weigh on investor sentiment.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "A new antitrust lawsuit could weigh on investor sentiment.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "unsupported_acquisition",
+      "claim": "The acquisition may expand the company into new markets.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "The acquisition may expand the company into new markets.",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "empty_response",
+      "claim": "",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "",
+        "topic": null,
+        "evidence_quote": null
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "topic_quote_mismatch",
+      "claim": "A lawsuit could affect expectations.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "A lawsuit could affect expectations.",
+        "topic": "legal",
+        "evidence_quote": "Apple announced a new product."
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "invented_quote",
+      "claim": "An acquisition could matter.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "An acquisition could matter.",
+        "topic": "deal",
+        "evidence_quote": "Apple announced an acquisition."
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "wrong_source_quote",
+      "claim": "A launch could affect demand.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "A launch could affect demand.",
+        "topic": "product",
+        "evidence_quote": "Microsoft announced a new product."
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "unknown_topic",
+      "claim": "A launch could matter.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple announced a new product. No sales forecast was provided.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "A launch could matter.",
+        "topic": "invented",
+        "evidence_quote": "Apple announced a new product."
+      },
+      "displayed_explanations": [],
+      "accepted": false,
+      "supported_by_fixture": false,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "supported_denial_context",
+      "claim": "Deal coverage may affect expectations; check whether it is a denial.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple denied the acquisition rumor.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "Deal coverage may affect expectations; check whether it is a denial.",
+        "topic": "deal",
+        "evidence_quote": "Apple denied the acquisition rumor."
+      },
+      "displayed_explanations": [
+        {
+          "source_id": "S1",
+          "reported_event": "Apple announces a new product",
+          "topic": "deal",
+          "evidence_quote": "Apple denied the acquisition rumor.",
+          "possible_influence": "Deal coverage may affect expectations for growth, costs, or execution risk. Check whether the report describes a proposal, rumor, denial, or completed agreement before drawing conclusions.",
+          "interpretation_method": "evidence-selected-template"
+        }
+      ],
+      "accepted": true,
+      "supported_by_fixture": true,
+      "guardrail_expectation_met": true
+    },
+    {
+      "id": "supported_earnings_context",
+      "claim": "Earnings coverage may affect expectations.",
+      "source": {
+        "id": "S1",
+        "ticker": "AAPL",
+        "title": "Apple announces a new product",
+        "content": "Apple reported its quarterly earnings.",
+        "coverage": "Company event"
+      },
+      "model_selection": {
+        "source_id": "S1",
+        "possible_influence": "Earnings coverage may affect expectations.",
+        "topic": "earnings",
+        "evidence_quote": "Apple reported its quarterly earnings."
+      },
+      "displayed_explanations": [
+        {
+          "source_id": "S1",
+          "reported_event": "Apple announces a new product",
+          "topic": "earnings",
+          "evidence_quote": "Apple reported its quarterly earnings.",
+          "possible_influence": "Earnings and outlook coverage may affect expectations for future cash flows. Compare reported results with prior expectations; the excerpt alone does not establish the reason for the price move.",
+          "interpretation_method": "evidence-selected-template"
+        }
+      ],
+      "accepted": true,
+      "supported_by_fixture": true,
+      "guardrail_expectation_met": true
+    }
+  ]
+}

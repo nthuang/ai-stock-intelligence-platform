@@ -1,5 +1,5 @@
 ﻿"""Public response contracts; aliases retain dashboard-friendly column names."""
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,6 +20,7 @@ class StockRecord(BaseModel):
     ma_30: float | None = Field(default=None, alias="MA_30")
     volatility_7: float | None = Field(default=None, alias="Volatility_7")
     signal: str | None = Field(default=None, alias="Signal")
+    observed_at: datetime | None = Field(default=None, alias="Observed At")
 
 
 class SummaryResponse(BaseModel):
@@ -56,6 +57,15 @@ class AskResponse(SummaryResponse):
     answer: str
 
 
+class StockNewsRequest(BaseModel):
+    ticker: str = Field(min_length=1, max_length=12)
+    date: date
+
+
+class StockNewsResponse(AskResponse):
+    ticker: str
+
+
 class AlertClaimRequest(BaseModel):
     date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
     recipient: str = Field(min_length=3, max_length=320)
@@ -67,6 +77,7 @@ class AlertCompleteRequest(BaseModel):
 
 
 class HealthResponse(BaseModel):
+    latest_snapshot_observed_at: str | None = None
     status: Literal["healthy", "degraded"]
     database: str
     rows: int

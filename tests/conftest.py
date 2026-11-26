@@ -16,8 +16,10 @@ def block_external_ai(monkeypatch):
     """Tests must explicitly mock providers; developer keys never reach a network."""
     from openai._base_client import SyncAPIClient
     from tavily import TavilyClient
+    from backend import news
 
     def blocked(*args, **kwargs):
         raise AssertionError("Unmocked external AI request in automated test")
     monkeypatch.setattr(SyncAPIClient, "request", blocked)
     monkeypatch.setattr(TavilyClient, "search", blocked)
+    monkeypatch.setattr(news, 'rss_candidates', lambda ticker: {'status': 'ok', 'results': []})

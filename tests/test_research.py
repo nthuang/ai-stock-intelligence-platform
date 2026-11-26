@@ -15,8 +15,26 @@ SOURCES = [{'id': 'S1', 'ticker': 'AAPL', 'title': 'Apple earnings', 'content': 
             'url': 'https://example.com/apple', 'publisher': 'example.com', 'published_date': '2026-01-02T12:00:00Z'}]
 
 
+def test_holdings_report_cannot_be_explained_as_current_selling_pressure(monkeypatch):
+    payload = {'explanations': [{'source_id': 'S1', 'possible_influence': 'Selling may have pressured the stock.'}]}
+    response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))])
+    client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
+    monkeypatch.setattr(research.ai_summary, '_get_client', lambda: client)
+    result = research.grounded_narrative([], [{**SOURCES[0], 'coverage': 'Holdings report'}], 'Why Apple?')
+    assert result['source'] == 'fallback'
+    assert result['explanations'] == []
+
+
+def mock_grounded_response(monkeypatch, payload):
+    response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))])
+    create = Mock(return_value=response)
+    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    monkeypatch.setattr(research.ai_summary, '_get_client', lambda: fake)
+    return create
+
+
 @pytest.mark.parametrize('payload,expected', [
-    ({'overview': 'Apple moved amid earnings reports.', 'explanations': [{'source_id': 'S1', 'possible_influence': 'Earnings may influence expectations.'}]}, 'groq'),
+    ({'explanations': [{'source_id': 'S1', 'topic': 'earnings', 'evidence_quote': 'Apple reported earnings.'}]}, 'groq'),
     ({'overview': 'A report.', 'explanations': [{'source_id': 'S99', 'possible_influence': 'Could matter.'}]}, 'fallback'),
     ({'overview': 'Visit https://invented.example', 'explanations': []}, 'fallback'),
     ({'overview': 'AAPL gained 99%.', 'explanations': []}, 'fallback'),
@@ -24,14 +42,12 @@ SOURCES = [{'id': 'S1', 'ticker': 'AAPL', 'title': 'Apple earnings', 'content': 
     ({'overview': None, 'explanations': []}, 'fallback'),
 ])
 def test_citation_and_numeric_validation(monkeypatch, payload, expected):
-    response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))])
-    create = Mock(return_value=response)
-    fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
-    monkeypatch.setattr(research.ai_summary, '_get_client', lambda: fake)
+    create = mock_grounded_response(monkeypatch, payload)
     result = research.grounded_narrative([], SOURCES, 'Why Apple?')
     assert result['source'] == expected
     prompt = create.call_args.kwargs['messages']
     assert 'untrusted' in prompt[0]['content']
+    assert 'Return JSON with only explanations' in prompt[0]['content']
     assert 'https://example.com/apple' not in prompt[1]['content']
     if expected == 'groq':
         assert result['explanations'][0]['reported_event'] == 'Apple earnings'
@@ -47,7 +63,98 @@ def test_news_targets_prioritize_signals_and_bound_searches(monkeypatch):
     assert lookup.call_count == 1
     assert lookup.call_args.args[1] == 'NVDA'
     assert statuses['AAPL']['status'] == 'request_limit'
-    assert 'MSFT' not in statuses
+    assert statuses['MSFT']['status'] == 'request_limit'
+
+
+@pytest.mark.parametrize('changes,signals,expected', [
+    ([0.5, -2, 1], ['NORMAL', 'NORMAL', 'NORMAL'], ['NVDA', 'MSFT']),
+    ([1, -2, 0.5], ['NORMAL', 'NORMAL', 'BIG_GAIN'], ['MSFT', 'NVDA']),
+])
+def test_summary_searches_quiet_sessions_and_backfills_after_alerts(monkeypatch, changes, signals, expected):
+    rows = [{'Ticker': ticker, 'Date': '2026-01-02', 'Daily Return %': change, 'Signal': signal}
+            for ticker, change, signal in zip(['AAPL', 'NVDA', 'MSFT'], changes, signals)]
+    lookup = Mock(return_value={'status': 'no_results', 'articles': [], 'cache_hit': False})
+    monkeypatch.setattr(research, 'get_news', lookup)
+    monkeypatch.setenv('NEWS_MAX_TICKERS_PER_REQUEST', '2')
+
+    sources, statuses = research.retrieve_context(None, rows, 'market', summary=True)
+
+    assert sources == []
+    assert [call.args[1] for call in lookup.call_args_list] == expected
+    assert set(statuses) == {'AAPL', 'NVDA', 'MSFT'}
+    assert statuses['AAPL']['status'] == 'request_limit'
+    assert all(statuses[ticker]['status'] == 'no_results' for ticker in expected)
+
+
+@pytest.mark.parametrize('invalid', [
+    {'source_id': 'S99', 'possible_influence': 'Earnings may influence expectations.'},
+    {'source_id': ['S1'], 'possible_influence': 'Earnings may influence expectations.'},
+    {'source_id': 'S1', 'possible_influence': None},
+    {'source_id': 'S1', 'possible_influence': 'Earnings may matter: https://invented.example.'},
+    {'source_id': 'S1', 'possible_influence': 'Earnings may matter according to [S99].'},
+    {'source_id': 'S1', 'possible_influence': 'Earnings may have grown 99%.'},
+    {'source_id': 'S1', 'possible_influence': 'Earnings definitely caused the gain and may matter again.'},
+    {'source_id': 'S1', 'possible_influence': 'The moving average may confirm momentum.'},
+    {'source_id': 'S1', 'possible_influence': 'Earnings support the technical trend.'},
+    {'source_id': 'S1', 'possible_influence': 'Earnings support expectations.'},
+    'malformed explanation',
+])
+def test_invalid_explanation_does_not_discard_valid_source_context(monkeypatch, invalid):
+    influence = 'Reported earnings may influence investor sentiment and expectations.'
+    mock_grounded_response(monkeypatch, {'explanations': [invalid, {
+        'source_id': 'S1', 'reported_event': 'Invented title', 'possible_influence': influence,
+        'topic': 'earnings', 'evidence_quote': 'Apple reported earnings.'}]})
+
+    result = research.grounded_narrative([], SOURCES, 'Why Apple?')
+
+    assert result['source'] == 'groq'
+    assert len(result['explanations']) == 1
+    assert result['explanations'][0]['reported_event'] == 'Apple earnings'
+    assert result['explanations'][0]['evidence_quote'] == 'Apple reported earnings.'
+    assert result['explanations'][0]['possible_influence'] != influence
+
+
+@pytest.mark.parametrize('overview', [
+    'Apple gained 99% because of earnings. Visit https://invented.example [S99].',
+    None,
+    {'untrusted': 'unexpected structure'},
+])
+def test_unused_overview_is_ignored_without_discarding_valid_explanations(monkeypatch, overview):
+    mock_grounded_response(monkeypatch, {'overview': overview, 'explanations': [{
+        'source_id': 'S1', 'topic': 'earnings', 'evidence_quote': 'Apple reported earnings.'}]})
+
+    result = research.grounded_narrative([], SOURCES, 'Why Apple?')
+
+    assert result['source'] == 'groq'
+    assert result['summary'] == 'Same-session reports provide context, but do not establish what caused the observed price move.'
+    assert 'invented' not in json.dumps(result)
+    assert len(result['explanations']) == 1
+
+
+@pytest.mark.parametrize('explanations', [[], [
+    {'source_id': 'S1', 'possible_influence': 'Earnings definitely caused the move.'},
+    {'source_id': 'S99', 'possible_influence': 'Could matter.'},
+]])
+def test_fallback_preserves_retrieved_sources_when_no_explanations_are_valid(monkeypatch, tmp_path, explanations):
+    mock_grounded_response(monkeypatch, {'explanations': explanations})
+    monkeypatch.setattr(research, 'get_news', lambda *args: {
+        'status': 'ok', 'articles': SOURCES, 'cache_hit': False})
+    rows = [{'Ticker': 'AAPL', 'Date': '2026-01-02', 'Close': 110,
+             'Daily Return %': 1, 'Signal': 'NORMAL'}]
+    engine = create_engine('sqlite:///' + str(tmp_path / 'research.db'))
+    Base.metadata.create_all(engine)
+    try:
+        result = research.research(engine, rows, 'Explain Apple news', summary=True)
+        assert result['llm_source'] == 'fallback'
+        assert result['explanations'] == []
+        assert result['news_status'] == 'ok'
+        assert result['sources'][0]['title'] == 'Apple earnings'
+        assert result['sources'][0]['url'] == SOURCES[0]['url']
+        assert result['sources'][0]['news_date'] == result['sources'][0]['stock_date'] == '2026-01-02'
+        assert 'content' not in result['sources'][0]
+        assert result['analysis']['metrics']['advancers'] == 1
+    finally:
+        engine.dispose()
 
 
 def test_delivery_retries_and_deduplication(tmp_path):
@@ -107,7 +214,7 @@ def test_cached_or_mocked_old_news_is_rejected_at_research_boundary(monkeypatch)
 
 def test_generated_overview_cannot_invert_computed_trend(monkeypatch):
     payload = {'overview': 'The short-term average was above price and long-term average below.',
-               'explanations': [{'source_id': 'S1', 'possible_influence': 'Earnings may influence expectations.'}]}
+               'explanations': [{'source_id': 'S1', 'topic': 'earnings', 'evidence_quote': 'Apple reported earnings.'}]}
     response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=json.dumps(payload)))])
     fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
     monkeypatch.setattr(research.ai_summary, '_get_client', lambda: fake)

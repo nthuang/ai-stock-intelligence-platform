@@ -12,6 +12,7 @@ from backend.models import Base, StockPrice
 
 @pytest.fixture
 def client(monkeypatch):
+    monkeypatch.setenv('NOTIFICATION_API_KEY', 'test-notification-key')
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     monkeypatch.setattr(main, "engine", engine)
@@ -24,7 +25,7 @@ def client(monkeypatch):
             dict(date=datetime(2026, 1, 2), ticker="MSFT", open=200, high=201, low=190,
                  close=192, volume=900, daily_return_pct=-4, signal="BIG_DROP"),
         ])
-    with TestClient(main.app) as test_client:
+    with TestClient(main.app, headers={'X-Notification-Key': 'test-notification-key'}) as test_client:
         yield test_client
     engine.dispose()
 
@@ -174,6 +175,39 @@ def test_stale_notifications_are_never_claimed(client):
     assert result == {'allowed': False, 'reason': 'ineligible_snapshot'}
 
 
+def test_legacy_live_prices_never_inherit_timestamp_from_newer_fetch(client, monkeypatch):
+    monkeypatch.setenv('DATA_MODE', 'live')
+    monkeypatch.setattr(main.market_refresh, 'ensure', lambda: None)
+    monkeypatch.setattr(main.market_refresh, 'last_success', '2026-01-03T23:00:00Z')
+    response = client.post('/stock-news', json={'ticker': 'AAPL', 'date': '2026-01-02'}).json()
+    assert response['news_status'] == 'snapshot_unavailable'
+    assert response['sources'] == [] and response['analysis_cutoff'] is None
+    assert response['data_freshness']['session_status'] == 'unknown'
+    assert client.get('/health').json()['latest_snapshot_observed_at'] is None
+
+
+def test_delivery_http_flow_waits_for_close_and_deduplicates(client, monkeypatch):
+    from backend.models import StockObservation
+    monkeypatch.setattr(main, 'data_age', lambda value: (0, False))
+    with main.engine.begin() as connection:
+        connection.execute(StockObservation.__table__.insert(), [
+            {'date': datetime(2026, 1, 2), 'ticker': ticker,
+             'observed_at': datetime.fromisoformat('2026-01-02T15:00:00+00:00')}
+            for ticker in ('AAPL', 'MSFT')])
+    payload = {'date': '2026-01-02', 'recipient': 'test@example.com'}
+    assert client.post('/notifications/claim', json=payload).json()['allowed'] is False
+    with main.engine.begin() as connection:
+        connection.execute(StockObservation.__table__.update().values(
+            observed_at=datetime.fromisoformat('2026-01-02T21:30:00+00:00')))
+    claim = client.post('/notifications/claim', json=payload).json()
+    assert claim['allowed'] and 'Daily Market Intelligence' in claim['html']
+    assert client.post('/notifications/claim', json=payload).json()['reason'] == 'pending'
+    acknowledgment = {'key': claim['key'], 'token': claim['token']}
+    assert client.post('/notifications/complete', json=acknowledgment).json() == {'recorded': True}
+    assert client.post('/notifications/complete', json=acknowledgment).json() == {'recorded': True}
+    assert client.post('/notifications/claim', json=payload).json()['reason'] == 'already_sent'
+
+
 def test_ask_returns_retrieved_sources_and_cited_explanation(client, monkeypatch):
     import json
     from types import SimpleNamespace
@@ -183,7 +217,7 @@ def test_ask_returns_retrieved_sources_and_cited_explanation(client, monkeypatch
                'content': 'Apple reported earnings.', 'relevance_score': .9}
     monkeypatch.setattr(research, 'get_news', lambda *args, **kwargs: {'status': 'ok', 'articles': [article], 'cache_hit': False})
     content = json.dumps({'overview': 'Apple moved amid earnings reports.',
-                          'explanations': [{'source_id': 'S1', 'possible_influence': 'Earnings may influence sentiment.'}]})
+                          'explanations': [{'source_id': 'S1', 'topic': 'earnings', 'evidence_quote': article['content']}]})
     response = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=content))])
     fake = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=lambda **kwargs: response)))
     monkeypatch.setattr(research.ai_summary, '_get_client', lambda: fake)
@@ -228,3 +262,47 @@ def test_question_with_wrong_direction_is_corrected(client):
     result = client.post('/ask', json={'question': 'Why did Microsoft rise?'}).json()
     assert 'MSFT fell on 2026-01-02' in result['premise_note']
     assert result['answer'].startswith(result['premise_note'])
+
+
+def test_stock_news_always_searches_selected_company_and_displayed_date(client, monkeypatch):
+    from backend import research
+    calls = []
+    def lookup(engine, ticker, market_date, question):
+        calls.append((ticker, market_date, question))
+        return {'status': 'no_results', 'articles': [], 'cache_hit': False}
+    monkeypatch.setattr(research, 'get_news', lookup)
+    result = client.post('/stock-news', json={'ticker': 'aapl', 'date': '2026-01-01'})
+    assert result.status_code == 200
+    payload = result.json()
+    assert payload['ticker'] == 'AAPL'
+    assert payload['date'] == '2026-01-01'
+    assert payload['performance'][0]['Close'] == 100
+    assert len(payload['performance']) == 1
+    assert [(ticker, date) for ticker, date, _ in calls] == [('AAPL', '2026-01-01')]
+    assert 'news_retrieval' in payload['tools_used']
+    assert payload['news_status'] == 'no_results'
+
+
+def test_stock_news_does_not_substitute_another_date_or_company(client, monkeypatch):
+    from backend import research
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Invalid selection should not consume news credits')
+    monkeypatch.setattr(research, 'get_news', forbidden)
+    assert client.post('/stock-news', json={'ticker': 'MSFT', 'date': '2026-01-01'}).status_code == 404
+    assert client.post('/stock-news', json={'ticker': 'GOOG', 'date': '2026-01-02'}).status_code == 422
+    assert client.post('/stock-news', json={'ticker': 'AAPL', 'date': 'invalid'}).status_code == 422
+
+
+def test_stock_news_keeps_dated_links_when_commentary_fails(client, monkeypatch):
+    from backend import research
+    article = {'ticker': 'AAPL', 'title': 'Apple earnings', 'url': 'https://example.com/apple',
+               'publisher': 'example.com', 'published_date': '2026-01-02T12:00:00Z',
+               'content': 'Apple reported earnings.', 'relevance_score': .9}
+    monkeypatch.setattr(research, 'get_news', lambda *args, **kwargs: {
+        'status': 'ok', 'articles': [article], 'cache_hit': True})
+    result = client.post('/stock-news', json={'ticker': 'AAPL', 'date': '2026-01-02'}).json()
+    assert result['llm_source'] == 'fallback'
+    assert result['news_status'] == 'ok'
+    assert result['sources'][0]['url'] == article['url']
+    assert result['sources'][0]['news_date'] == result['sources'][0]['stock_date'] == result['date']
+    assert result['explanations'] == []

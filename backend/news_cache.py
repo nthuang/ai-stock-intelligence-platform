@@ -65,9 +65,10 @@ def write_cache(connection, table, key, payload, expires):
 def get_news(engine, ticker, market_date, question=None):
     if status := news.availability():
         return {"status": status, "articles": [], "cache_hit": False}
-    key = digest({"version": 2, "date_policy": "same-session-conservative-close", "ticker": ticker.upper(), "date": market_date,
+    display_limit = news.setting("NEWS_MAX_RESULTS", 5, 1, 20)
+    key = digest({"version": 9, "date_policy": "same-session-exchange-close", "ticker": ticker.upper(), "date": market_date,
                   "intent": news.normalize_intent(question), "depth": "basic",
-                  "results": news.setting("NEWS_MAX_RESULTS", 5, 1, 20)})
+                  "results": display_limit, "candidate_limit": news.candidate_limit(display_limit)})
     table = NewsCache.__table__
     try:
         with engine.connect() as connection:
@@ -97,11 +98,18 @@ def get_news(engine, ticker, market_date, question=None):
                     connection.execute(usage.insert().values(period=period, searches=1))
             connection.commit()
             result = news.search_stock_news(ticker, market_date, question)
-            result["retrieved_at"] = datetime.now(timezone.utc).isoformat()
+            retrieved_at = datetime.now(timezone.utc)
+            result["retrieved_at"] = retrieved_at.isoformat()
             ttl = news.setting("NEWS_CACHE_TTL_SECONDS", 21600, 1)
             if result["status"] not in {"ok", "no_results"}:
                 ttl = min(ttl, 60)  # Cooldown, with no automatic credit-consuming retry.
-            write_cache(connection, table, key, result, time.time() + ttl)
+            elif result["status"] == "no_results" or retrieved_at < news.session_close(market_date):
+                # New reports can become eligible while the session develops.
+                # Only a later explicit request retries, using the same budgets.
+                ttl = min(ttl, 900)
+            expires = time.time() + ttl
+            result['cache_expires_at'] = datetime.fromtimestamp(expires, timezone.utc).isoformat()
+            write_cache(connection, table, key, result, expires)
             return {**result, "cache_hit": False}
     except SQLAlchemyError:
         # Fail closed: unavailable quota storage must never permit unmetered calls.

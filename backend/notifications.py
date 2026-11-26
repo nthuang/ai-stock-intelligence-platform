@@ -25,6 +25,7 @@ def render_report(summary):
             links.append(f"<li>[{e(source['id'])}] <a href='{e(url)}'>{e(source['title'])}</a> — "
                          f"{e(source.get('publisher'))}, {e(source.get('published_date'))}</li>")
     explanations = "".join(f"<li>Reported event [{e(x['source_id'])}]: {e(x['reported_event'])}. "
+                           f"Source excerpt: {e(x.get('evidence_quote'))}. "
                            f"Possible influence: {e(x['possible_influence'])}</li>" for x in summary.get("explanations", []))
     return ("<!doctype html><html><body style='font:15px Arial,sans-serif;color:#18232f;max-width:760px;margin:auto'>"
             f"<h1>Daily Market Intelligence</h1><p>Trading date: <strong>{e(summary['date'])}</strong></p>"

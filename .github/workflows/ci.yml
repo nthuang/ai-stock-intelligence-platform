@@ -45,6 +45,14 @@ jobs:
         run: |
           python -m scripts.backtest_signals
           git diff --exit-code -- data/processed/backtest_metrics.json
+      - name: Evaluate news policy and expose semantic gaps
+        run: python -m scripts.evaluate_news --check --output data/processed/news_evaluation.json
+      - name: Upload evaluation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-evaluation
+          path: data/processed/news_evaluation.json
       - name: Validate Compose configuration
         run: docker compose config --quiet
       - name: Start offline demo

@@ -101,6 +101,8 @@
       "parameters": {
         "method": "POST",
         "url": "http://api:8000/notifications/claim",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-Notification-Key", "value": "={{ $env.NOTIFICATION_API_KEY }}"}]},
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({date: $json.date, recipient: $env.ALERT_EMAIL}) }}",
@@ -155,6 +157,8 @@
       "parameters": {
         "method": "POST",
         "url": "http://api:8000/notifications/complete",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [{"name": "X-Notification-Key", "value": "={{ $env.NOTIFICATION_API_KEY }}"}]},
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({key: $(\"Claim delivery\").item.json.key, token: $(\"Claim delivery\").item.json.token}) }}",

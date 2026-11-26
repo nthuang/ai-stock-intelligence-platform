@@ -33,6 +33,14 @@ class NewsCache(Base):
     expires_at = Column(Float, nullable=False)
 
 
+class StockObservation(Base):
+    """Fetch-start boundary committed atomically with prices; not an exchange tick time."""
+    __tablename__ = 'stock_observations'
+    date = Column(DateTime, primary_key=True)
+    ticker = Column(String, primary_key=True)
+    observed_at = Column(DateTime(timezone=True), nullable=False)
+
+
 class NewsUsage(Base):
     __tablename__ = "news_usage"
     period = Column(String(16), primary_key=True)

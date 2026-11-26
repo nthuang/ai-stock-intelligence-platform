@@ -1,5 +1,5 @@
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 
 import pandas as pd
@@ -7,7 +7,7 @@ import yfinance as yf
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.dialects.postgresql import insert
-from backend.models import StockPrice
+from backend.models import StockPrice, StockObservation
 
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "AMZN"]
@@ -32,6 +32,7 @@ def ensure_directories() -> None:
 
 
 def fetch_ticker_data(ticker: str, period: str = PERIOD, interval: str = INTERVAL) -> pd.DataFrame:
+    fetch_started = datetime.now(timezone.utc)
     df = yf.download(ticker, period=period, interval=interval, auto_adjust=False,
                      progress=False, threads=False, timeout=10)
 
@@ -51,6 +52,7 @@ def fetch_ticker_data(ticker: str, period: str = PERIOD, interval: str = INTERVA
     df = df[required_cols].copy()
     df["Ticker"] = ticker
     df = df.dropna(subset=["Date", "Open", "High", "Low", "Close", "Volume"])
+    df['Observed At'] = fetch_started
     return df
 
 
@@ -150,6 +152,14 @@ def upsert_to_postgres(df: pd.DataFrame) -> None:
                       for column in db_df.columns if column not in {"date", "ticker"}},
             )
             connection.execute(statement)
+        if 'Observed At' in df.columns:
+            observations = [{'date': row['Date'], 'ticker': row['Ticker'], 'observed_at': row['Observed At']}
+                            for row in df.loc[db_df.index].to_dict('records')]
+            for offset in range(0, len(observations), 1000):
+                statement = insert(StockObservation.__table__).values(observations[offset:offset + 1000])
+                connection.execute(statement.on_conflict_do_update(
+                    index_elements=['date', 'ticker'],
+                    set_={'observed_at': statement.excluded.observed_at}))
 
 
 def main() -> None:

@@ -11,3 +11,4 @@ openai==2.8.1
 pytest==9.0.1
 httpx==0.28.1
 tavily-python==0.8.5
+pandas_market_calendars==5.7.0
