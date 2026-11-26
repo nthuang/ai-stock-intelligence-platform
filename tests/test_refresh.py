@@ -6,6 +6,17 @@ from fastapi import HTTPException
 from backend import refresh
 
 
+@pytest.fixture(autouse=True)
+def open_session(monkeypatch):
+    monkeypatch.setattr(refresh, 'market_state', lambda: {'refresh_window': True})
+
+
+def test_closed_market_refresh_is_hourly(monkeypatch):
+    monkeypatch.setattr(refresh, 'market_state', lambda: {'refresh_window': False})
+    monkeypatch.setenv('REFRESH_INTERVAL_SECONDS', '60')
+    assert refresh.MarketRefresh().interval == 3600
+
+
 def test_live_refresh_caches_and_expires(monkeypatch):
     monkeypatch.setenv('DATA_MODE', 'live')
     monkeypatch.setenv('REFRESH_INTERVAL_SECONDS', '60')
@@ -65,6 +76,8 @@ def test_demo_does_not_fetch(monkeypatch):
 def test_incomplete_universe_does_not_write(monkeypatch):
     import pandas as pd
     from scripts import fetch_data
+    from backend import universe
+    monkeypatch.setattr(universe, 'ingestion_tickers', lambda engine: ['AAPL', 'MSFT'])
     monkeypatch.setattr(fetch_data, 'TICKERS', ['AAPL', 'MSFT'])
     def fetch(ticker):
         if ticker == 'MSFT':
@@ -74,3 +87,21 @@ def test_incomplete_universe_does_not_write(monkeypatch):
     monkeypatch.setattr(fetch_data, 'upsert_to_postgres', lambda _: pytest.fail('Partial write'))
     with pytest.raises(ValueError, match='No data'):
         refresh.fetch_and_store()
+
+
+def test_benchmarks_ingested_separately_and_failure_does_not_block_equities(monkeypatch):
+    import pandas as pd
+    from scripts import fetch_data
+    from backend import universe
+    monkeypatch.setattr(universe, 'ingestion_tickers', lambda engine: ['AMD', 'SPY', 'QQQ'])
+    calls, stored = [], []
+    def fetch(ticker):
+        calls.append(ticker)
+        if ticker == 'QQQ':
+            raise RuntimeError('Unavailable benchmark')
+        return pd.DataFrame({'Ticker': [ticker], 'Date': [pd.Timestamp('2026-01-02')], 'Close': [100.0]})
+    monkeypatch.setattr(fetch_data, 'fetch_ticker_data', fetch)
+    monkeypatch.setattr(fetch_data, 'upsert_to_postgres', lambda frame: stored.extend(frame.Ticker))
+    refresh.fetch_and_store()
+    assert calls == ['AMD', 'SPY', 'QQQ']
+    assert stored == ['AMD', 'SPY']

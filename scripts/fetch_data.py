@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import yfinance as yf
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select, text, tuple_
 from sqlalchemy.dialects.postgresql import insert
 from backend.models import StockPrice, StockObservation
 
@@ -84,7 +84,7 @@ def save_raw_data(df: pd.DataFrame) -> Path:
 
 
 def save_processed_data(df: pd.DataFrame) -> Path:
-    output_path = PROCESSED_DIR / "stocks_processed.csv"
+    output_path = PROCESSED_DIR / "stocks_live_processed.csv"
     df.to_csv(output_path, index=False)
     return output_path
 
@@ -135,15 +135,29 @@ def prepare_db_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return db_df
 
 
-def upsert_to_postgres(df: pd.DataFrame) -> None:
-    if engine is None:
+def upsert_to_postgres(df: pd.DataFrame, *, target_engine=None) -> None:
+    database = target_engine if target_engine is not None else engine
+    if database is None:
         raise RuntimeError("DATABASE_URL is not set in .env")
 
     db_df = prepare_db_dataframe(df)
 
-    # Native upsert avoids a shared staging table and is safe for overlapping jobs.
+    # Serialize writers and reject delayed batches before changing either table.
     records = db_df.astype(object).where(pd.notna(db_df), None).to_dict("records")
-    with engine.begin() as connection:
+    with database.begin() as connection:
+        connection.execute(text("SET LOCAL lock_timeout = '10s'"))
+        connection.execute(text('SELECT pg_advisory_xact_lock(73190421)'))
+        if 'Observed At' in df.columns:
+            incoming = {(row['Date'], row['Ticker']): pd.Timestamp(row['Observed At'])
+                        for row in df.loc[db_df.index].to_dict('records')}
+            if any(pd.isna(value) or value.tzinfo is None for value in incoming.values()):
+                raise ValueError('Observation timestamps must be timezone-aware')
+            table = StockObservation.__table__
+            existing = connection.execute(select(table).where(
+                tuple_(table.c.date, table.c.ticker).in_(list(incoming)))).mappings()
+            if any(pd.Timestamp(row['observed_at']) > incoming[(row['date'], row['ticker'])]
+                   for row in existing):
+                raise ValueError('Older ingestion batch cannot overwrite newer observations')
         for offset in range(0, len(records), 1000):
             statement = insert(StockPrice.__table__).values(records[offset:offset + 1000])
             statement = statement.on_conflict_do_update(
@@ -162,12 +176,13 @@ def upsert_to_postgres(df: pd.DataFrame) -> None:
                     set_={'observed_at': statement.excluded.observed_at}))
 
 
-def main() -> None:
+def main(tickers=None) -> None:
     ensure_directories()
+    tickers = TICKERS if tickers is None else tickers
 
     all_frames = []
 
-    for ticker in TICKERS:
+    for ticker in tickers:
         try:
             print(f"Fetching {ticker}...")
             ticker_df = fetch_ticker_data(ticker)
@@ -175,16 +190,17 @@ def main() -> None:
         except Exception as exc:
             print(f"Failed to fetch {ticker}: {exc}")
 
-    if len(all_frames) != len(TICKERS):
+    if len(all_frames) != len(tickers):
         raise RuntimeError("Incomplete ticker batch; database and snapshots were not updated")
+    if len({frame['Date'].max() for frame in all_frames}) != 1:
+        raise ValueError('Provider returned inconsistent latest sessions')
 
     raw_df = pd.concat(all_frames, ignore_index=True)
     processed_df = add_indicators(raw_df)
 
+    upsert_to_postgres(processed_df)
     raw_path = save_raw_data(raw_df)
     processed_path = save_processed_data(processed_df)
-
-    upsert_to_postgres(processed_df)
 
     print("\nDone.")
     print(f"Raw data saved to: {raw_path}")
@@ -195,4 +211,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from backend.universe import ingestion_tickers
+    main(ingestion_tickers(engine))

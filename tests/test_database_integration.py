@@ -37,6 +37,11 @@ def test_postgres_upsert_is_idempotent_and_updates(monkeypatch):
         frame["Close"] = 102.0
         frame['Observed At'] = pd.Timestamp('2026-01-01T16:00:00Z')
         fetch_data.upsert_to_postgres(frame)
+        older = frame.copy()
+        older['Close'] = 99.0
+        older['Observed At'] = pd.Timestamp('2026-01-01T14:00:00Z')
+        with pytest.raises(ValueError, match='Older ingestion batch'):
+            fetch_data.upsert_to_postgres(older)
         with engine.connect() as connection:
             assert connection.scalar(select(func.count()).select_from(StockPrice)) == 1
             row = connection.execute(select(StockPrice.__table__)).mappings().one()
@@ -108,3 +113,48 @@ def test_postgres_delivery_deduplication(postgres_news_engine):
     assert complete_delivery(engine, claim['key'], claim['token'])
     engine.dispose()
     assert claim_delivery(engine, '2026-01-02', 'test@example.com')['reason'] == 'already_sent'
+
+
+def test_postgres_watchlist_admission_ingests_and_removal_keeps_prices(postgres_news_engine, monkeypatch):
+    from backend import universe
+    engine = postgres_news_engine
+    monkeypatch.setenv('DATA_MODE', 'live')
+    monkeypatch.setattr(universe, 'validate_provider', lambda ticker: 'Advanced Micro Devices')
+    frame = pd.DataFrame({'Ticker': ['AMD'], 'Date': [pd.Timestamp('2026-01-02')],
+        'Open': [100.0], 'High': [105.0], 'Low': [99.0], 'Close': [101.0], 'Volume': [1000],
+        'Observed At': [pd.Timestamp('2026-01-02T21:30:00Z')]})
+    monkeypatch.setattr(fetch_data, 'fetch_ticker_data', lambda ticker: frame.copy())
+    universe.change(engine, 'AMD')
+    engine.dispose()
+    assert 'AMD' in universe.names(engine)
+    with engine.connect() as connection:
+        assert connection.scalar(select(StockPrice.ticker)) == 'AMD'
+        assert connection.scalar(select(StockObservation.observed_at)).hour == 21
+    universe.change(engine, 'AMD', remove=True)
+    assert 'AMD' not in universe.names(engine)
+    with engine.connect() as connection:
+        assert connection.scalar(select(func.count()).select_from(StockPrice)) == 1
+
+
+def test_postgres_concurrent_batches_keep_newest_observation(postgres_news_engine, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+    monkeypatch.setattr(fetch_data, 'engine', postgres_news_engine)
+    barrier = Barrier(2)
+    frame = fetch_data.add_indicators(pd.DataFrame({
+        'Date': [pd.Timestamp('2026-01-02')], 'Ticker': ['TEST'],
+        'Open': [100.0], 'High': [105.0], 'Low': [99.0], 'Close': [101.0], 'Volume': [1000]}))
+    def write(hour):
+        batch = frame.copy()
+        batch['Close'] = float(hour + 90)
+        batch['Observed At'] = pd.Timestamp(f'2026-01-02T{hour}:00:00Z')
+        barrier.wait(timeout=5)
+        try:
+            fetch_data.upsert_to_postgres(batch)
+        except ValueError as exc:
+            assert hour == 14 and 'Older ingestion batch' in str(exc)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(write, [14, 15]))
+    with postgres_news_engine.connect() as connection:
+        assert connection.scalar(select(StockPrice.close)) == 105.0
+        assert connection.scalar(select(StockObservation.observed_at)).hour == 15

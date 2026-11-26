@@ -7,6 +7,7 @@ from threading import Lock
 import time
 
 from fastapi.responses import JSONResponse
+from backend.operations import record
 
 logger = logging.getLogger(__name__)
 _lock = Lock()
@@ -36,8 +37,13 @@ async def access_control(request, call_next):
     if request.url.path.startswith('/notifications/'):
         configured = os.getenv('NOTIFICATION_API_KEY', '')
         supplied = request.headers.get('X-Notification-Key', '')
-        if mode == 'public_demo' or not configured or not hmac.compare_digest(configured, supplied):
+        if mode == 'public_demo' or not configured or not hmac.compare_digest(configured.encode('utf-8'), supplied.encode('utf-8')):
             return JSONResponse(status_code=403, content={'detail': 'Notification access denied'})
+    if request.url.path.startswith('/watchlist') and request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+        configured = os.getenv('WATCHLIST_API_KEY') or os.getenv('NOTIFICATION_API_KEY', '')
+        supplied = request.headers.get('X-Watchlist-Key', '')
+        if mode == 'public_demo' or not configured or not hmac.compare_digest(configured.encode(), supplied.encode()):
+            return JSONResponse(status_code=403, content={'detail': 'Watchlist access denied'})
     if mode == 'public_demo' and request.url.path != '/health':
         # Ignore client-supplied forwarding headers. Behind a proxy this deliberately
         # shares one limit unless trusted proxy handling is configured by the operator.
@@ -46,6 +52,9 @@ async def access_control(request, call_next):
             return JSONResponse(status_code=429, headers={'Retry-After': '60'},
                                 content={'detail': 'Demo request limit reached; retry shortly'})
     response = await call_next(request)
+    record('http_completed', duration_ms=(time.monotonic() - started) * 1000)
+    if response.status_code >= 500:
+        record('http_server_error')
     route = request.scope.get('route')
     logger.info('request route=%s status=%d duration_ms=%.1f',
                 getattr(route, 'path', 'unmatched'), response.status_code,

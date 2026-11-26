@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from backend import news
 from backend.models import NewsCache, NewsUsage
+from backend.operations import record
 
 _locks = [Lock() for _ in range(64)]
 
@@ -66,7 +67,7 @@ def get_news(engine, ticker, market_date, question=None):
     if status := news.availability():
         return {"status": status, "articles": [], "cache_hit": False}
     display_limit = news.setting("NEWS_MAX_RESULTS", 5, 1, 20)
-    key = digest({"version": 9, "date_policy": "same-session-exchange-close", "ticker": ticker.upper(), "date": market_date,
+    key = digest({"version": 10, "company": news.company_name(ticker), "date_policy": "same-session-exchange-close", "ticker": ticker.upper(), "date": market_date,
                   "intent": news.normalize_intent(question), "depth": "basic",
                   "results": display_limit, "candidate_limit": news.candidate_limit(display_limit)})
     table = NewsCache.__table__
@@ -74,7 +75,9 @@ def get_news(engine, ticker, market_date, question=None):
         with engine.connect() as connection:
             cached = read_cache(connection, table, key, time.time())
         if cached:
+            record('news_cache_hit')
             return {**cached, "cache_hit": True}
+        record('news_cache_miss')
         with exclusive(engine, "news-budget") as connection:
             if connection is None:
                 return {"status": "busy", "articles": [], "cache_hit": False}

@@ -2,6 +2,7 @@ import os
 import logging
 import json
 from backend.analysis import analyze_snapshot, analysis_text
+from backend.operations import record
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -51,11 +52,14 @@ def generate_summary(signals: list[dict]) -> dict:
     """
 
     try:
-        response = _get_client().chat.completions.create(
+        client = _get_client()
+        record('llm_requests')
+        response = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.3,
+            max_completion_tokens=2048,
             timeout=20,
         )
         content = response.choices[0].message.content
@@ -74,6 +78,7 @@ def generate_summary(signals: list[dict]) -> dict:
             "model": GROQ_MODEL,
         }
     except Exception as exc:
+        record('summary_fallback')
         logger.warning("Summary provider unavailable: %s", type(exc).__name__)
         error_type = type(exc).__name__
         reasons = {

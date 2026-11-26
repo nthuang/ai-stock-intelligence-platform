@@ -11,6 +11,8 @@ def test_notification_endpoints_fail_closed(monkeypatch):
     monkeypatch.setenv('NOTIFICATION_API_KEY', 'private-test-key')
     assert client.post('/notifications/claim', json={}, headers={'X-Notification-Key': 'wrong'}).status_code == 403
     assert client.post('/notifications/claim', json={}, headers={'X-Notification-Key': 'private-test-key'}).status_code == 422
+    monkeypatch.setenv('NOTIFICATION_API_KEY', 'non-ascii-\u00e9')
+    assert client.post('/notifications/claim', json={}, headers={'X-Notification-Key': 'wrong'}).status_code == 403
 
 
 def test_public_demo_cannot_enable_live_or_notifications(monkeypatch):

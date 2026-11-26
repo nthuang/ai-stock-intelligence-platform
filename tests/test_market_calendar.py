@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from backend import news, research
-from backend.market_calendar import session_bounds, session_close
+from backend.market_calendar import session_bounds, session_close, market_state
 
 
 def test_exchange_holidays_early_closes_and_dst():
@@ -29,3 +29,14 @@ def test_cached_news_is_filtered_against_persisted_price_observation(monkeypatch
     monkeypatch.setattr(research, 'get_news', lambda *args: {'status': 'ok', 'articles': articles})
     sources, _ = research.retrieve_context(None, [row], 'news')
     assert [s['url'] for s in sources] == ['https://example.com/14']
+
+
+def test_market_refresh_window_holiday_early_close_and_year_boundary():
+    thanksgiving = market_state(datetime.fromisoformat('2026-11-26T17:00:00+00:00'))
+    assert thanksgiving['phase'] == 'closed'
+    assert thanksgiving['refresh_window'] is False
+    assert thanksgiving['latest_completed_session'] == '2026-11-25'
+    early = market_state(datetime.fromisoformat('2026-11-27T18:15:00+00:00'))
+    assert early['phase'] == 'closed' and early['refresh_window'] is True
+    assert not market_state(datetime.fromisoformat('2026-11-27T18:31:00+00:00'))['refresh_window']
+    assert market_state(datetime.fromisoformat('2026-01-01T17:00:00+00:00'))['latest_completed_session'] == '2025-12-31'

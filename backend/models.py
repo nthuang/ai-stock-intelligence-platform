@@ -1,7 +1,14 @@
-from sqlalchemy import Column, DateTime, Float, Integer, String, UniqueConstraint, JSON
+from sqlalchemy import Column, DateTime, Float, Integer, String, UniqueConstraint, JSON, Boolean
 from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
+
+
+class WatchlistEntry(Base):
+    __tablename__ = 'watchlist'
+    ticker = Column(String(8), primary_key=True)
+    name = Column(String(160), nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
 
 
 class StockPrice(Base):

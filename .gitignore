@@ -9,6 +9,7 @@ venv/
 # Data
 data/**/*.csv
 data/**/*.parquet
+!data/processed/benchmarks_demo.csv
 
 # Env
 .env

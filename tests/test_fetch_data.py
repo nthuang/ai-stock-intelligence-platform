@@ -108,3 +108,27 @@ def test_partial_fetch_does_not_update_database_or_snapshots(monkeypatch):
     monkeypatch.setattr(fetch_data, 'upsert_to_postgres', unexpected)
     with pytest.raises(RuntimeError, match='Incomplete ticker batch'):
         fetch_data.main()
+
+
+def test_live_export_does_not_replace_reproducible_fixture(tmp_path, monkeypatch):
+    from scripts import fetch_data
+    monkeypatch.setattr(fetch_data, 'PROCESSED_DIR', tmp_path)
+    fixture = tmp_path / 'stocks_processed.csv'
+    fixture.write_text('original fixture')
+    result = fetch_data.save_processed_data(pd.DataFrame({'Close': [100]}))
+    assert result.name == 'stocks_live_processed.csv'
+    assert fixture.read_text() == 'original fixture'
+
+
+def test_database_failure_prevents_snapshot_export(monkeypatch):
+    import pytest
+    from scripts import fetch_data
+    monkeypatch.setattr(fetch_data, 'ensure_directories', lambda: None)
+    monkeypatch.setattr(fetch_data, 'fetch_ticker_data', lambda ticker: pd.DataFrame({
+        'Date': [pd.Timestamp('2026-01-02')], 'Ticker': [ticker], 'Close': [100]}))
+    def fail(frame):
+        raise RuntimeError('database unavailable')
+    monkeypatch.setattr(fetch_data, 'upsert_to_postgres', fail)
+    monkeypatch.setattr(fetch_data, 'save_raw_data', lambda _: pytest.fail('Wrote snapshot before commit'))
+    with pytest.raises(RuntimeError, match='database unavailable'):
+        fetch_data.main()

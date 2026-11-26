@@ -24,6 +24,7 @@ class StockRecord(BaseModel):
 
 
 class SummaryResponse(BaseModel):
+    quantitative_context: dict = Field(default_factory=dict)
     date: str
     summary: str
     llm_source: Literal["rule", "groq", "fallback"]
@@ -51,6 +52,12 @@ class SummaryResponse(BaseModel):
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=1000)
+    benchmark: Literal['SPY', 'QQQ'] = 'SPY'
+    sessions: int = Field(default=21, ge=1, le=126)
+
+
+class WatchlistRequest(BaseModel):
+    ticker: str = Field(min_length=1, max_length=8)
 
 
 class AskResponse(SummaryResponse):

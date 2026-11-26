@@ -11,6 +11,10 @@ def check(base_url: str) -> None:
             return json.load(response)
 
     health = get('/health')
+    status = get('/system/status')
+    assert status['market']['exchange'] == 'NASDAQ'
+    assert 'remaining' in status['news_budget_utc']['daily']
+    assert status['health']['latest_date'] == health['latest_date']
     assert health['rows'] >= 620
     assert len(get('/tickers')['tickers']) == 5
     assert len(get('/latest')) == 5
@@ -33,7 +37,7 @@ def check(base_url: str) -> None:
         summary = get('/ai-summary/latest')
         assert summary['llm_source'] != 'groq' and summary['sources'] == []
         assert len(summary['performance']) == 5
-    print('Demo smoke checks passed: ingestion, pagination, nulls, schemas, dashboard, research')
+    print('Demo smoke checks passed: ingestion, pagination, nulls, schemas, dashboard, research, system status')
 
 
 if __name__ == '__main__':

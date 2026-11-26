@@ -4,12 +4,12 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Market Observatory · Stock Intelligence</title>
 <style>
-:root{color-scheme:dark;--bg:#101820;--panel:#18232f;--muted:#a7b8c9;--border:#2b3b4c;--accent:#78d9c0}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4fa;font:15px system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:38px 24px}header{display:flex;justify-content:space-between;gap:24px;align-items:center}h1{font-size:32px;letter-spacing:-1px;margin:8px 0}h2{font-size:18px;margin:0 0 10px}p{color:var(--muted);line-height:1.6}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;text-transform:uppercase}a{color:var(--accent)}button,select{background:#243547;color:#fff;border:1px solid #476078;border-radius:8px;padding:10px;cursor:pointer}button:focus-visible,select:focus-visible{outline:3px solid var(--accent)}.status{padding:12px 16px;border:1px solid #746744;background:#302c20;border-radius:8px;margin:24px 0;color:#f2d698}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.metric,.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px}.metric small{color:var(--muted)}.metric strong{display:block;font-size:28px;margin-top:10px}.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin:16px 0}.panel.full{margin:16px 0}.chart{width:100%;height:280px}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:13px}.legend span{padding:5px 0}.positive{color:#78d9c0}.negative{color:#ffa5a5}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 8px;border-bottom:1px solid var(--border);white-space:nowrap}th{color:var(--muted);font-weight:500}.table-wrap{overflow:auto}.note{font-size:12px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px}#error{color:#ffa5a5}svg text{fill:#a7b8c9;font:12px system-ui}footer{border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:12px}@media(max-width:800px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}header{align-items:flex-start}h1{font-size:27px}}
+:root{color-scheme:dark;--bg:#101820;--panel:#18232f;--muted:#a7b8c9;--border:#2b3b4c;--accent:#78d9c0}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:#eef4fa;font:15px system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:38px 24px}header{display:flex;justify-content:space-between;gap:24px;align-items:center}h1{font-size:32px;letter-spacing:-1px;margin:8px 0}h2{font-size:18px;margin:0 0 10px}p{color:var(--muted);line-height:1.6}.eyebrow{color:var(--accent);font-size:12px;letter-spacing:2px;text-transform:uppercase}a{color:var(--accent)}button,select,input{background:#243547;color:#fff;border:1px solid #476078;border-radius:8px;padding:10px;cursor:pointer}button:focus-visible,select:focus-visible{outline:3px solid var(--accent)}.status{padding:12px 16px;border:1px solid #746744;background:#302c20;border-radius:8px;margin:24px 0;color:#f2d698}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.metric,.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:22px}.metric small{color:var(--muted)}.metric strong{display:block;font-size:28px;margin-top:10px}.grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin:16px 0}.panel.full{margin:16px 0}.chart{width:100%;height:280px}.legend{display:flex;gap:15px;flex-wrap:wrap;font-size:13px}.legend span{padding:5px 0}.positive{color:#78d9c0}.negative{color:#ffa5a5}table{width:100%;border-collapse:collapse;text-align:left}th,td{padding:12px 8px;border-bottom:1px solid var(--border);white-space:nowrap}th{color:var(--muted);font-weight:500}.table-wrap{overflow:auto}.note{font-size:12px}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px}#error{color:#ffa5a5}svg text{fill:#a7b8c9;font:12px system-ui}footer{border-top:1px solid var(--border);padding-top:14px;color:var(--muted);font-size:12px}@media(max-width:800px){.grid{grid-template-columns:1fr}.metrics{grid-template-columns:1fr}header{align-items:flex-start}h1{font-size:27px}}
 .insights{padding-left:20px;line-height:1.65}.insights li{margin:12px 0;color:var(--muted)}.insights strong{color:#eef4fa}details summary{cursor:pointer;color:var(--accent);padding:10px 0}#summary-commentary{white-space:pre-line}
 .news-controls{display:flex;gap:14px;align-items:end;flex-wrap:wrap}.news-controls label{display:grid;gap:8px;min-width:220px}.source-cards{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.source-card{padding:18px;border:1px solid var(--border);border-radius:10px;background:var(--bg);overflow-wrap:anywhere}.source-card h3{font-size:16px;line-height:1.5;margin:0 0 8px}.source-card p{margin:8px 0}.source-card .connection{border-top:1px solid var(--border);padding-top:12px}.news-link{font-size:12px;margin:8px 0;display:block}.news-empty{padding:12px 0}button:disabled{opacity:.6;cursor:wait}#news-move{font-weight:600;color:#eef4fa}.toolbar{flex-wrap:wrap}</style>
 </head>
 <body><main>
-<header><div><div class="eyebrow">Market Observatory / Research demo</div><h1>Stock Intelligence</h1><p>Five companies. Transparent signals. Traceable observations.</p></div><a href="/docs">API documentation ↗</a></header>
+<header><div><div class="eyebrow">Market Observatory / Research demo</div><h1>Stock Intelligence</h1><p>Your watchlist. Market context. Traceable observations.</p></div><a href="/docs">API documentation ↗</a></header>
 <div id="status" class="status" role="status">Loading market snapshot…</div><p id="error" role="alert"></p>
 <section class="metrics" aria-label="Snapshot metrics"><div class="metric"><small>Latest stored session</small><strong id="asof">—</strong></div><div class="metric"><small>Companies in snapshot</small><strong id="count">—</strong></div><div class="metric"><small>Movement alerts · ±3% threshold</small><strong id="alerts">—</strong></div></section>
 <div class="grid"><section class="panel"><h2>Relative price performance</h2><p class="note">Each stock starts at 100 on the first displayed session. Price returns exclude dividends.</p><div id="performance" class="chart"></div><div id="legend" class="legend"></div></section><section class="panel"><h2>Latest daily moves</h2><p class="note">Close-to-close price change, by company.</p><div id="movers"></div></section></div>
@@ -25,6 +25,23 @@
  <p id="news-meta" class="note"></p><p id="news-commentary" class="note"></p><ul id="news-sources" class="source-cards"></ul>
 </section>
 <footer>Automatically refreshed daily market analytics. Signals are threshold rules, not predictions or investment advice. <a href="/stocks?limit=1000">Inspect source records</a>.</footer>
+<details><summary>System status</summary><p id="operations" class="note">Checking local system state...</p><a href="/system/status">Inspect operational status</a></details>
+<section class="panel full" aria-labelledby="watchlist-heading">
+ <h2 id="watchlist-heading">Monitored equities</h2><p class="note">Benchmarks SPY and QQQ are separate and do not trigger equity alerts. Removing a stock preserves its stored history.</p>
+ <ul id="watchlist-items"></ul>
+ <form id="watchlist-form" class="news-controls"><label>US equity ticker<input id="new-ticker" maxlength="8" placeholder="AMD" required></label><label>Private watchlist key<input id="watchlist-key" type="password" autocomplete="off" placeholder="Required for changes"></label><button id="add-ticker" type="submit">Add and load history</button></form>
+ <p id="watchlist-status" role="status"></p>
+</section>
+<section class="panel full" aria-labelledby="quant-heading">
+ <h2 id="quant-heading">Benchmark and risk analysis</h2>
+ <div class="news-controls"><label>Benchmark<select id="benchmark"><option value="SPY">SPY · S&amp;P 500 ETF</option><option value="QQQ">QQQ · Nasdaq-100 ETF</option></select></label><label>Return period<select id="period"><option value="5">5 trading sessions</option><option value="21" selected>21 trading sessions</option><option value="63">63 trading sessions</option><option value="126">126 trading sessions</option></select></label><label>Risk window<select id="risk-window"><option value="20">20 trading sessions</option><option value="60" selected>60 trading sessions</option></select></label></div>
+ <p id="quant-status" role="status"></p><div id="relative-chart" class="chart"></div><div id="relative-legend" class="legend"></div>
+ <div class="table-wrap"><table><thead><tr><th>Stock</th><th>Period return %</th><th>Excess return (pp)</th><th>Annual volatility %</th><th>Beta</th><th>Sharpe (RF=0)</th><th>Max drawdown %</th><th>Relative volume</th><th>Return Z-score</th></tr></thead><tbody id="risk-rows"></tbody></table></div>
+ <details><summary>Rolling return correlations</summary><div id="correlations" class="table-wrap"></div></details>
+ <p id="quant-methodology" class="note"></p>
+ <form id="advanced-form" class="news-controls"><label style="flex:1">Research question<input id="advanced-question" maxlength="1000" required placeholder="Which stock has the highest beta relative to SPY?"></label><button id="advanced-submit" type="submit">Ask research question</button></form>
+ <p id="advanced-answer" aria-live="polite"></p><ul id="advanced-sources" class="source-cards"></ul>
+</section>
 </main>
 <script>
 'use strict';
@@ -49,7 +66,10 @@ function chart(target,series,dates){
  node('text',{x:pad,y:height-10},dates[0].slice(0,10));node('text',{x:width-pad,y:height-10,'text-anchor':'end'},dates.at(-1).slice(0,10));el(target).replaceChildren(svg);
 }
 async function load(){
- const initialHealth=await get('/health');
+ await loadWatchlist();
+ const operational=await get('/system/status');
+ const initialHealth=operational.health;
+ el('operations').textContent=`NASDAQ ${operational.market.phase} | latest completed session ${operational.market.latest_completed_session} | news searches remaining: ${operational.news_budget_utc.daily.remaining} today, ${operational.news_budget_utc.monthly.remaining} this month (UTC budgets) | last ingestion duration ${operational.ingestion.last_ingestion_duration_seconds??'unavailable'} seconds. Demo mode does not use news credits.`;
  const start=new Date();start.setMonth(start.getMonth()-6);
  const dateFilter=initialHealth.mode==='live'?`&start=${start.toISOString().slice(0,10)}`:'';
  let records=[],offset=0;while(true){const page=await get(`/stocks?limit=1000&offset=${offset}${dateFilter}`);records.push(...page);if(page.length<1000)break;offset+=page.length;}
@@ -80,7 +100,41 @@ async function load(){
  el('ticker').onchange=averages;averages();
  for(const row of latest){const tr=document.createElement('tr');for(const value of [row.Ticker,number(row.Close),number(row['Daily Return %'])+'%',number(row.Volume),row.Signal||'WARMUP']){const td=document.createElement('td');td.textContent=value;tr.appendChild(td);}el('rows').appendChild(tr);}
  for(const row of [...latest].sort((a,b)=>(b['Daily Return %']??-Infinity)-(a['Daily Return %']??-Infinity))){const p=document.createElement('p');p.className=row['Daily Return %']>=0?'positive':'negative';p.textContent=`${row.Ticker}   ${number(row['Daily Return %'])}%`;el('movers').appendChild(p);}
+ await loadQuantitative();
 }
+async function loadWatchlist(){
+ const result=await get('/watchlist');el('watchlist-items').replaceChildren();
+ for(const stock of result.stocks){companies[stock.ticker]=stock.name;const li=document.createElement('li');li.textContent=`${stock.ticker} · ${stock.name} `;
+  const button=document.createElement('button');button.type='button';button.textContent='Remove';button.setAttribute('aria-label',`Remove ${stock.ticker} from watchlist`);button.disabled=!result.editable;
+  button.onclick=()=>mutateWatchlist('DELETE',stock.ticker);li.append(button);el('watchlist-items').append(li);}
+ el('add-ticker').disabled=!result.editable;el('new-ticker').disabled=!result.editable;
+ el('watchlist-status').textContent=`${result.stocks.length}/${result.max_size} monitored equities. ${result.editable?'Up to 20 validation attempts per UTC day.':'Offline demo: watchlist changes are disabled.'}`;
+}
+async function mutateWatchlist(method,ticker){
+ const key=el('watchlist-key').value;if(!key){el('watchlist-status').textContent='Enter the private watchlist key to make changes.';return;}
+ el('add-ticker').disabled=true;el('watchlist-status').textContent='Updating watchlist; historical ingestion may take a moment...';
+ try{const response=await fetch('/watchlist'+(method==='DELETE'?'/'+encodeURIComponent(ticker):''),{method,headers:{'Content-Type':'application/json','X-Watchlist-Key':key},...(method==='POST'?{body:JSON.stringify({ticker})}:{})});
+  const body=await response.json();if(!response.ok)throw new Error(typeof body.detail==='string'?body.detail:'Watchlist update rejected');el('new-ticker').value='';await load();
+ }catch(error){el('watchlist-status').textContent=error.message;}finally{el('add-ticker').disabled=false;}
+}
+el('watchlist-form').onsubmit=event=>{event.preventDefault();mutateWatchlist('POST',el('new-ticker').value);};
+let quantRequest=0;
+async function loadQuantitative(){
+ const request=++quantRequest;el('quant-status').textContent='Calculating session-aligned metrics...';
+ try{const data=await get(`/analytics?benchmark=${el('benchmark').value}&sessions=${el('period').value}&window=${el('risk-window').value}`);if(request!==quantRequest)return;
+  el('risk-rows').replaceChildren();el('relative-legend').replaceChildren();el('correlations').replaceChildren();
+  el('quant-status').textContent=data.status==='unavailable'?'No analytical history available.':`${data.start} through ${data.as_of}. Benchmark: ${data.benchmark_status==='ok'?'available':'unavailable or insufficient history'}. Missing statistics are shown as —, not zero.`;
+  el('quant-methodology').textContent=data.methodology||'No data';
+  for(const row of data.stocks){const tr=document.createElement('tr');for(const field of ['ticker','cumulative_return_pct','relative_return_pp','annualized_volatility_pct','beta','sharpe_zero_rf','max_drawdown_pct','relative_volume','return_zscore']){const td=document.createElement('td');td.textContent=field==='ticker'?row[field]:number(row[field]);tr.append(td);}el('risk-rows').append(tr);}
+  if(data.series?.length){const symbols=[...data.stocks.map(s=>s.ticker),data.benchmark],series=symbols.map((ticker,i)=>({name:ticker,color:colors[i%colors.length],values:data.series.map(point=>point.returns_pct[ticker])}));chart('relative-chart',series,data.series.map(p=>p.date));for(const item of series){const span=document.createElement('span');span.textContent=item.name;span.style.color=item.color;el('relative-legend').append(span);}}
+  const table=document.createElement('table'),head=document.createElement('tr');for(const label of ['',...data.stocks.map(s=>s.ticker)]){const th=document.createElement('th');th.textContent=label;head.append(th);}table.append(head);
+  for(const stock of data.stocks){const tr=document.createElement('tr'),th=document.createElement('th');th.textContent=stock.ticker;tr.append(th);for(const other of data.stocks){const td=document.createElement('td');td.textContent=number(data.correlations[stock.ticker][other.ticker]);tr.append(td);}table.append(tr);}el('correlations').append(table);
+ }catch(error){if(request===quantRequest)el('quant-status').textContent=error.message;}
+}
+for(const id of ['benchmark','period','risk-window'])el(id).onchange=loadQuantitative;
+el('advanced-form').onsubmit=async event=>{event.preventDefault();el('advanced-submit').disabled=true;el('advanced-answer').textContent='Researching...';el('advanced-sources').replaceChildren();
+ try{const response=await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:el('advanced-question').value,benchmark:el('benchmark').value,sessions:Number(el('period').value)})});const body=await response.json();if(!response.ok)throw new Error(typeof body.detail==='string'?body.detail:'Research unavailable');el('advanced-answer').textContent=body.answer;renderSources(body,'advanced-sources');}catch(error){el('advanced-answer').textContent=error.message;}finally{el('advanced-submit').disabled=false;}
+};
 function addInsight(target, title, text){
  const item=document.createElement('li'),heading=document.createElement('strong');
  heading.textContent=title+': ';item.append(heading,document.createTextNode(text));el(target).append(item);return item;

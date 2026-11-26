@@ -4,6 +4,15 @@ import pytest
 from scripts.backtest_signals import calculate_metrics
 
 
+def test_committed_fixture_reproduces_committed_metrics():
+    import json
+    from pathlib import Path
+    root = Path(__file__).resolve().parents[1]
+    expected = json.loads((root / 'data/processed/backtest_metrics.json').read_text())
+    actual = calculate_metrics(pd.read_csv(root / 'data/processed/stocks_processed.csv'))
+    assert actual == expected
+
+
 def panel():
     return pd.DataFrame({
         "Ticker": ["AAPL"] * 3,

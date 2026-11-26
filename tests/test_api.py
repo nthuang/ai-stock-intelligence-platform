@@ -34,6 +34,110 @@ def test_root_endpoint(client):
     assert client.get("/").json()["message"] == "AI Stock Intelligence API is running"
 
 
+def test_watchlist_and_benchmarks_are_separate_and_removed_history_is_retained(client, monkeypatch):
+    from backend import universe
+    universe.seed(main.engine)
+    assert len(client.get('/watchlist').json()['stocks']) == 5
+    assert all(item['status'] == 'unavailable' for item in client.get('/benchmarks').json()['benchmarks'])
+    assert client.post('/watchlist', json={'ticker': 'AMD'}).status_code == 403
+    monkeypatch.setenv('WATCHLIST_API_KEY', 'watch-test')
+    # Demo never enables provider-backed mutations even with a valid key.
+    assert client.post('/watchlist', json={'ticker': 'AMD'}, headers={'X-Watchlist-Key': 'watch-test'}).status_code == 403
+    monkeypatch.setenv('DATA_MODE', 'live')
+    monkeypatch.setattr(main.market_refresh, 'ensure', lambda: None)
+    response = client.delete('/watchlist/AAPL', headers={'X-Watchlist-Key': 'watch-test'})
+    assert response.status_code == 200
+    assert client.get('/stocks?ticker=AAPL').json() == []
+    assert all(row['Ticker'] != 'AAPL' for row in client.get('/latest').json())
+    with main.engine.connect() as connection:
+        assert connection.execute(StockPrice.__table__.select().where(StockPrice.ticker == 'AAPL')).first() is not None
+    with main.engine.begin() as connection:
+        connection.execute(StockPrice.__table__.insert().values(date=datetime(2026, 1, 2), ticker='SPY',
+            open=100, high=105, low=99, close=104, volume=1000, daily_return_pct=4, signal='BIG_GAIN'))
+    assert all(row['Ticker'] != 'SPY' for row in client.get('/signals/latest').json())
+    assert client.get('/benchmarks').json()['benchmarks'][0]['latest']['Ticker'] == 'SPY'
+    assert client.get('/ai-summary/latest').json()['quantitative_context']['benchmark'] == 'SPY'
+
+
+def test_analytics_and_quantitative_ask_do_not_use_news_or_llm(client, monkeypatch):
+    from backend import research
+    monkeypatch.setattr(research, 'get_news', lambda *a, **k: pytest.fail('Unnecessary news call'))
+    monkeypatch.setattr(research.ai_summary, '_get_client', lambda: pytest.fail('Unnecessary LLM call'))
+    result = client.get('/analytics?benchmark=QQQ&sessions=5&window=20')
+    assert result.status_code == 200
+    assert result.json()['benchmark_status'] == 'insufficient_history'
+    assert client.get('/analytics?benchmark=BAD').status_code == 422
+    assert client.get('/analytics?sessions=9999').status_code == 422
+    answer = client.post('/ask', json={'question': 'Which stock has the highest beta relative to SPY?'}).json()
+    assert 'unavailable' in answer['answer']
+    assert answer['news_status'] == 'not_requested'
+    assert answer['llm_source'] == 'rule'
+
+
+def test_new_stock_is_available_through_existing_api_contracts(client, monkeypatch):
+    import pandas as pd
+    from backend import universe
+    from scripts import fetch_data
+    monkeypatch.setenv('DATA_MODE', 'live')
+    monkeypatch.setenv('WATCHLIST_API_KEY', 'watch-test')
+    monkeypatch.setattr(main.market_refresh, 'ensure', lambda: None)
+    monkeypatch.setattr(universe, 'validate_provider', lambda ticker: 'Advanced Micro Devices')
+    frame = pd.DataFrame({'Date': [pd.Timestamp('2026-01-02')], 'Ticker': ['AMD'], 'Close': [100.0]})
+    monkeypatch.setattr(fetch_data, 'fetch_ticker_data', lambda ticker: frame.copy())
+    def store(frame, target_engine):
+        with target_engine.begin() as connection:
+            connection.execute(StockPrice.__table__.insert().values(date=datetime(2026, 1, 2), ticker='AMD',
+                open=99, high=101, low=98, close=100, volume=1000, daily_return_pct=1, signal='NORMAL'))
+    monkeypatch.setattr(fetch_data, 'upsert_to_postgres', store)
+    assert client.post('/watchlist', json={'ticker': 'AMD'}, headers={'X-Watchlist-Key': 'watch-test'}).status_code == 201
+    assert client.get('/stocks?ticker=AMD').json()[0]['Ticker'] == 'AMD'
+    assert 'AMD' in client.get('/tickers').json()['tickers']
+    answer = client.post('/ask', json={'question': 'What is AMD closing price?'}).json()
+    assert '$100.00' in answer['answer'] and 'Unsupported' not in answer['answer']
+    news = client.post('/stock-news', json={'ticker': 'AMD', 'date': '2026-01-02'}).json()
+    assert news['ticker'] == 'AMD' and news['news_status'] == 'snapshot_unavailable'
+
+
+def test_configured_missing_equity_prevents_fresh_snapshot(client, monkeypatch):
+    from backend import universe
+    universe.seed(main.engine)
+    monkeypatch.setattr(main, 'data_age', lambda value: (0, False))
+    assert client.get('/health').json()['stale'] is True
+    metadata = main.research_metadata(main.latest_records())
+    assert 'NVDA' in metadata['data_freshness']['missing_monitored_tickers']
+    assert metadata['stale'] is True
+
+
+def test_status_never_refreshes_providers(client, monkeypatch):
+    monkeypatch.setattr(main.market_refresh, 'ensure', lambda: pytest.fail('Status refreshed provider'))
+    result = client.get('/system/status')
+    assert result.status_code == 200
+    body = result.json()
+    assert body['news_budget_utc']['daily']['used'] == 0
+    assert body['market']['exchange'] == 'NASDAQ'
+    assert body['delivery_records'] == {}
+    assert 'counters' in body['process']
+
+
+def test_observation_only_refresh_reuses_summary(client):
+    from backend.models import StockObservation
+    assert client.get('/ai-summary/latest').json()['cache_hit'] is False
+    with main.engine.begin() as connection:
+        connection.execute(StockObservation.__table__.insert(), [
+            {'date': datetime(2026, 1, 2), 'ticker': ticker,
+             'observed_at': datetime.fromisoformat('2026-01-02T21:30:00+00:00')}
+            for ticker in ('AAPL', 'MSFT')])
+    assert client.get('/ai-summary/latest').json()['cache_hit'] is True
+
+
+def test_notifications_cannot_send_previous_session_on_weekend(client, monkeypatch):
+    monkeypatch.setattr(main, 'data_age', lambda value: (1, False))
+    monkeypatch.setattr(main, 'market_state', lambda: {'market_date': '2026-01-03'})
+    result = client.post('/notifications/claim', json={
+        'date': '2026-01-02', 'recipient': 'test@example.com'}).json()
+    assert result == {'allowed': False, 'reason': 'ineligible_snapshot'}
+
+
 def test_null_indicators_and_sql_filters(client):
     response = client.get("/stocks?ticker=aapl&start=2026-01-01&end=2026-01-01")
     assert response.status_code == 200
@@ -189,6 +293,7 @@ def test_legacy_live_prices_never_inherit_timestamp_from_newer_fetch(client, mon
 def test_delivery_http_flow_waits_for_close_and_deduplicates(client, monkeypatch):
     from backend.models import StockObservation
     monkeypatch.setattr(main, 'data_age', lambda value: (0, False))
+    monkeypatch.setattr(main, 'market_state', lambda: {'market_date': '2026-01-02'})
     with main.engine.begin() as connection:
         connection.execute(StockObservation.__table__.insert(), [
             {'date': datetime(2026, 1, 2), 'ticker': ticker,

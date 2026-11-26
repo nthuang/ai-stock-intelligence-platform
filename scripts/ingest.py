@@ -9,7 +9,9 @@ import pandas as pd
 
 from backend.db import engine
 from backend.models import Base
-from scripts.fetch_data import main as fetch_live, upsert_to_postgres
+from scripts.fetch_data import upsert_to_postgres, add_indicators
+from backend.refresh import fetch_and_store as fetch_live
+from backend.universe import seed
 
 logger = logging.getLogger(__name__)
 DEMO_PATH = Path(__file__).resolve().parent.parent / "data/processed/stocks_processed.csv"
@@ -17,10 +19,16 @@ DEMO_PATH = Path(__file__).resolve().parent.parent / "data/processed/stocks_proc
 
 def ingest(mode: str) -> None:
     Base.metadata.create_all(bind=engine)
+    seed(engine)
     if mode == "demo":
         frame = pd.read_csv(DEMO_PATH)
         frame["Date"] = pd.to_datetime(frame["Date"])
         upsert_to_postgres(frame)
+        benchmark_path = DEMO_PATH.with_name('benchmarks_demo.csv')
+        if benchmark_path.exists():
+            benchmarks = pd.read_csv(benchmark_path)
+            benchmarks['Date'] = pd.to_datetime(benchmarks['Date'])
+            upsert_to_postgres(add_indicators(benchmarks))
         logger.info("Loaded %d historical demo rows (latest %s)", len(frame), frame["Date"].max())
     else:
         fetch_live()

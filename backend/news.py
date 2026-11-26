@@ -1,5 +1,6 @@
 """Bounded Tavily adapter. External text is evidence, never instructions."""
 import logging
+from contextvars import ContextVar
 import math
 import os
 import re
@@ -18,6 +19,18 @@ logger = logging.getLogger(__name__)
 MARKET_TIMEZONE = ZoneInfo('America/New_York')
 COMPANIES = {"AAPL": "Apple", "AMZN": "Amazon", "MSFT": "Microsoft",
              "NVDA": "Nvidia", "TSLA": "Tesla"}
+company_context = ContextVar('research_companies', default=COMPANIES)
+
+
+def company_name(ticker):
+    name = company_context.get().get(ticker, ticker)
+    return re.sub(r',?\s+(?:incorporated|inc\.?|corporation|corp\.?|plc|ltd\.?|limited)\.?$', '', name, flags=re.I)
+
+
+def company_pattern(ticker):
+    # A / ON / IT are ordinary words: require explicit ticker notation for news.
+    symbol = rf'\b{re.escape(ticker)}\b' if len(ticker) > 2 else rf'(?:\${re.escape(ticker)}\b|\({re.escape(ticker)}\))'
+    return rf'(?:{symbol}|\b{re.escape(company_name(ticker))}\b)'
 
 
 def setting(name: str, default: int, minimum: int = 0, maximum: int = 1000000) -> int:
@@ -104,7 +117,7 @@ def is_article(url, title):
 
 def article_relevance(ticker, title, content):
     """Transparent editorial ordering, not a probability or causal score."""
-    company = rf'\b(?:{re.escape(ticker)}|{re.escape(COMPANIES[ticker])})\b'
+    company = company_pattern(ticker)
     if not re.search(company, title + ' ' + content, re.I):
         return {'priority': 0, 'coverage': 'unrelated'}
     if not re.search(company, title, re.I):
@@ -140,7 +153,7 @@ def rss_candidates(ticker):
             title = item.findtext('title') or ''
             content = html.unescape(re.sub(r'<[^>]+>', ' ', item.findtext('description') or ''))[:1500]
             # Company feeds can contain unrelated market headlines.
-            if not re.search(rf'\b(?:{re.escape(ticker)}|{re.escape(COMPANIES[ticker])})\b', title + ' ' + content, re.I):
+            if not re.search(company_pattern(ticker), title + ' ' + content, re.I):
                 continue
             results.append({'title': title, 'content': content, 'url': item.findtext('link'),
                             'published_date': item.findtext('pubDate'), 'score': 0.5})
@@ -153,7 +166,7 @@ def rss_candidates(ticker):
 def search_stock_news(ticker: str, market_date: str, question: str | None = None,
                       *, cutoff: datetime | None = None) -> dict:
     ticker = ticker.upper().strip()
-    if ticker not in COMPANIES:
+    if ticker not in company_context.get():
         raise ValueError(f"Unsupported ticker: {ticker}")
     if status := availability():
         return {"status": status, "articles": []}
@@ -163,7 +176,7 @@ def search_stock_news(ticker: str, market_date: str, question: str | None = None
     start_date = date.fromisoformat(market_date)
     cutoff = min(cutoff, analysis_cutoff(market_date)) if cutoff else analysis_cutoff(market_date)
     intent = normalize_intent(question)
-    query = f"{COMPANIES[ticker]} {ticker} stock news"
+    query = f"{company_name(ticker)} {ticker} stock news"
     if intent != 'market catalysts':
         query += ' ' + intent
     try:

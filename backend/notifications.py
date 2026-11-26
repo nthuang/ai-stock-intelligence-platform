@@ -27,9 +27,12 @@ def render_report(summary):
     explanations = "".join(f"<li>Reported event [{e(x['source_id'])}]: {e(x['reported_event'])}. "
                            f"Source excerpt: {e(x.get('evidence_quote'))}. "
                            f"Possible influence: {e(x['possible_influence'])}</li>" for x in summary.get("explanations", []))
+    benchmark_text = ' '.join(item['text'] for item in summary.get('analysis', {}).get('observations', [])
+                              if item['title'].startswith('Benchmark context'))
     return ("<!doctype html><html><body style='font:15px Arial,sans-serif;color:#18232f;max-width:760px;margin:auto'>"
             f"<h1>Daily Market Intelligence</h1><p>Trading date: <strong>{e(summary['date'])}</strong></p>"
             f"<h2>Market overview</h2><p>{e(summary['market_overview'])}</p>"
+            f"<p>{e(benchmark_text)}</p>"
             f"<table style='border-collapse:collapse;width:100%'><tr><th>Stock</th><th>Close</th><th>Daily return</th><th>Signal</th></tr>{rows}</table>"
             f"<h2>Potential explanations and catalysts</h2><ul>{explanations or '<li>No verified news explanation available.</li>'}</ul>"
             f"<h2>Supporting reports</h2><ul>{''.join(links) or '<li>No eligible sources retrieved.</li>'}</ul>"
